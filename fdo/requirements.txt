@@ -1,0 +1,34 @@
+# ── Core scientific ──────────────────────────────────────────────────────────
+numpy>=1.24
+pandas>=2.0
+scipy>=1.10
+scikit-learn>=1.3
+matplotlib>=3.7
+seaborn>=0.12
+networkx>=3.1
+biopython>=1.81
+
+# ── Structural biology ────────────────────────────────────────────────────────
+MDAnalysis>=2.6
+pdbfixer>=1.9
+
+# ── Molecular dynamics ────────────────────────────────────────────────────────
+# OpenMM is best installed via conda:
+#   conda install -c conda-forge openmm
+# or pip on supported platforms:
+openmm>=8.0; platform_system != "Windows"
+
+# ── Web / API ─────────────────────────────────────────────────────────────────
+requests>=2.31
+urllib3>=2.0
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────
+streamlit>=1.32
+plotly>=5.17
+py3Dmol>=2.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+pyyaml>=6.0
+tqdm>=4.65
+click>=8.1
+rich>=13.0

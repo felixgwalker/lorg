@@ -1,0 +1,93 @@
+project:
+  name: "FTO Interdomain Pocket Discovery Platform"
+  version: "1.0.0"
+  description: >
+    Structural biology platform for identifying transient interdomain
+    pockets in human FTO using molecular dynamics and pocket detection.
+
+fto:
+  gene: "FTO"
+  uniprot: "Q9C0B1"
+  full_name: "Fat mass and obesity-associated protein"
+  pdb_ids:
+    - "3LFM"   # Jia et al. 2011, Nature — canonical FTO structure
+    - "4IE4"   # Feng et al. 2014 — FTO + IOX1 inhibitor
+    - "4ZS3"   # Huang et al. 2015 — FTO + 5-aminofluorescein
+  primary_structure: "3LFM"
+  total_residues: 498
+  domains:
+    catalytic:
+      name: "AlkB-like catalytic domain"
+      short: "CAT"
+      start: 31
+      end: 326
+      color: "#4A90D9"
+    cterminal:
+      name: "C-terminal domain"
+      short: "CTD"
+      start: 327
+      end: 498
+      color: "#50C878"
+  active_site_residues: [53, 131, 190, 205, 231, 233, 307]
+  iron_binding_residues: [231, 233, 307]
+  substrate_binding_residues: [96, 106, 109, 130, 131, 190, 205, 231]
+  interdomain_linker: [315, 330]
+
+simulation:
+  n_replicas: 3
+  production_ns: 20.0
+  equilibration_ns: 2.0
+  timestep_fs: 2.0
+  temperature_K: 310.0
+  pressure_atm: 1.0
+  forcefield: "amber14-all.xml"
+  water_model: "amber14/tip3p.xml"
+  nonbonded_cutoff_nm: 1.0
+  save_interval_ps: 10.0
+  padding_nm: 1.2
+  ionic_strength_molar: 0.15
+  constraint_tolerance: 1.0e-5
+  barostat_frequency: 25
+  n_minimization_steps: 5000
+
+pocket_detection:
+  method: "grid"   # "fpocket" if binary available, else "grid"
+  min_volume_A3: 100
+  min_persistence_fraction: 0.03
+  max_pockets_per_frame: 20
+  top_n_pockets: 10
+  grid_spacing_A: 1.5
+  probe_radius_A: 1.4
+  burial_cutoff: 4
+
+analysis:
+  rmsd_selection: "backbone"
+  rmsf_selection: "backbone"
+  n_pca_components: 10
+  n_clusters: 5
+  contact_cutoff_A: 8.0
+  min_contact_persistence: 0.2
+
+conservation:
+  method: "consurf_api"
+  n_homologs: 50
+
+ligand:
+  run_docking: false
+  docking_software: "autodock_vina"
+  top_n_fragments: 10
+
+colors:
+  background: "#0d1117"
+  surface: "#161b22"
+  border: "#30363d"
+  catalytic_domain: "#4A90D9"
+  cterminal_domain: "#50C878"
+  pocket_highlight: "#FF6B35"
+  event_marker: "#FFD700"
+  text_primary: "#f0f6fc"
+  text_secondary: "#8b949e"
+  accent: "#58a6ff"
+  success: "#3fb950"
+  warning: "#d29922"
+  error: "#f85149"

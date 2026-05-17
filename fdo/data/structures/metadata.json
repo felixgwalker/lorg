@@ -1,0 +1,62 @@
+{
+  "3LFM": {
+    "pdb_id": "3LFM",
+    "title": "Crystal structure of the fat mass and obesity associated (FTO) protein reveals basis for its substrate specificity",
+    "resolution": 2.5,
+    "method": "X-ray",
+    "deposition": "2010-01-18T00:00:00.000+00:00",
+    "release": "2010-04-07T00:00:00.000+00:00",
+    "n_atoms": 3436,
+    "chains": [
+      "A"
+    ],
+    "n_residues": 420,
+    "ligands": [
+      "3DT",
+      "FE2",
+      "OGA"
+    ],
+    "file_path": "data/structures/3LFM.pdb",
+    "status": "ok"
+  },
+  "4IE4": {
+    "pdb_id": "4IE4",
+    "title": "Crystal structure of the human fat mass and obesity associated protein (FTO) in complex with 5-carboxy-8-hydroxyquinoline (IOX1)",
+    "resolution": 2.5,
+    "method": "X-ray",
+    "deposition": "2012-12-13T00:00:00.000+00:00",
+    "release": "2013-04-03T00:00:00.000+00:00",
+    "n_atoms": 3544,
+    "chains": [
+      "A"
+    ],
+    "n_residues": 438,
+    "ligands": [
+      "8XQ",
+      "GOL",
+      "ZN"
+    ],
+    "file_path": "data/structures/4IE4.pdb",
+    "status": "ok"
+  },
+  "4ZS3": {
+    "pdb_id": "4ZS3",
+    "title": "Structural complex of 5-aminofluorescein bound to the FTO protein",
+    "resolution": 2.45,
+    "method": "X-ray",
+    "deposition": "2015-05-13T00:00:00.000+00:00",
+    "release": "2015-11-04T00:00:00.000+00:00",
+    "n_atoms": 3604,
+    "chains": [
+      "A"
+    ],
+    "n_residues": 432,
+    "ligands": [
+      "A4F",
+      "AKG",
+      "MN"
+    ],
+    "file_path": "data/structures/4ZS3.pdb",
+    "status": "ok"
+  }
+}

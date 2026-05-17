@@ -1,0 +1,12 @@
+# Genomic Resurrection Scorer — Python pipeline dependencies
+# External bioinformatics tools (MapDamage, GATK, VEP) are system-level
+# dependencies invoked as subprocesses; they are not listed here.
+
+# Core
+python-dateutil>=2.9.0
+
+# Optional: structured JSON schema validation
+# jsonschema>=4.21.0
+
+# Optional: richer CLI output
+# rich>=13.7.0
