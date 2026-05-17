@@ -373,7 +373,7 @@ def render() -> None:
             """\
 # 1. Set up the environment
 conda env create -f environment.yml
-conda activate fdo
+conda activate fto-allosteric-pocket-discoverer
 
 # 2a. Full pipeline (requires OpenMM and ~2 h compute)
 python run_pipeline.py

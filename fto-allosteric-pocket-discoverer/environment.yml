@@ -1,4 +1,4 @@
-name: fdo
+name: fto-allosteric-pocket-discoverer
 channels:
   - conda-forge
   - defaults

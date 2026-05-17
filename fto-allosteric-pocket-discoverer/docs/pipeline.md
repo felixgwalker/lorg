@@ -20,7 +20,7 @@
 ### 1 · Set up environment
 ```bash
 conda env create -f environment.yml
-conda activate fdo
+conda activate fto-allosteric-pocket-discoverer
 ```
 
 ### 2 · Run the full pipeline

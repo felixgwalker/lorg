@@ -165,7 +165,7 @@ run_pipeline.py            Orchestrator — runs stages 01–10 in sequence
 ## Repository Structure
 
 ```
-fdo/
+fto-allosteric-pocket-discoverer/
 ├── README.md
 ├── PRD                    Product requirements document
 ├── config.yaml            Pipeline and simulation parameters
@@ -195,7 +195,7 @@ fdo/
 
 ```bash
 conda env create -f environment.yml
-conda activate fdo
+conda activate fto-allosteric-pocket-discoverer
 ```
 
 This installs OpenMM via conda-forge and all other dependencies.

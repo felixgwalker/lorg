@@ -132,7 +132,7 @@ st.markdown(
     .stRadio label { color: #c9d1d9 !important; }
 
     /* Status badge */
-    .fdo-badge {
+    .fto-badge {
         display: inline-block;
         background: #161b22;
         border: 1px solid #30363d;
@@ -142,19 +142,19 @@ st.markdown(
         color: #8b949e;
         font-family: monospace;
     }
-    .fdo-badge.ok     { border-color: #3fb950; color: #3fb950; }
-    .fdo-badge.warn   { border-color: #d29922; color: #d29922; }
-    .fdo-badge.demo   { border-color: #58a6ff; color: #58a6ff; }
+    .fto-badge.ok     { border-color: #3fb950; color: #3fb950; }
+    .fto-badge.warn   { border-color: #d29922; color: #d29922; }
+    .fto-badge.demo   { border-color: #58a6ff; color: #58a6ff; }
 
     /* Intro card */
-    .fdo-intro-card {
+    .fto-intro-card {
         background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
         border: 1px solid #30363d;
         border-radius: 12px;
         padding: 20px 24px;
         margin-bottom: 16px;
     }
-    .fdo-pill {
+    .fto-pill {
         display: inline-block;
         background: #21262d;
         border: 1px solid #30363d;
@@ -224,12 +224,12 @@ with badge_col:
     def _chip(label: str, ok: bool) -> str:
         cls  = "ok" if ok else "warn"
         icon = "✓" if ok else "○"
-        return f'<span class="fdo-badge {cls}">{icon} {label}</span>'
+        return f'<span class="fto-badge {cls}">{icon} {label}</span>'
 
     if demo_mode:
         st.markdown(
             '<div style="text-align:right;margin-top:14px">'
-            '<span class="fdo-badge demo">◈ DEMO MODE</span>'
+            '<span class="fto-badge demo">◈ DEMO MODE</span>'
             "</div>",
             unsafe_allow_html=True,
         )
@@ -289,7 +289,7 @@ with st.expander("ℹ️ What is this platform and how does it work?", expanded=
             """
             #### Platform at a glance
 
-            <div class="fdo-intro-card">
+            <div class="fto-intro-card">
             <div style="color:#58a6ff;font-weight:700;font-size:13px;
                         text-transform:uppercase;letter-spacing:.05em">Target</div>
             <div style="color:#f0f6fc;font-size:16px;font-weight:600;margin:4px 0 12px 0">
@@ -308,12 +308,12 @@ with st.expander("ℹ️ What is this platform and how does it work?", expanded=
             <div style="color:#58a6ff;font-weight:700;font-size:13px;
                         text-transform:uppercase;letter-spacing:.05em">Navigate</div>
             <div style="margin:6px 0">
-                <span class="fdo-pill">🏗️ Structure</span>
-                <span class="fdo-pill">📈 Trajectory</span>
-                <span class="fdo-pill">🕳️ Pockets</span>
-                <span class="fdo-pill">🔬 Analysis</span>
-                <span class="fdo-pill">⚡ Events</span>
-                <span class="fdo-pill">📄 Report</span>
+                <span class="fto-pill">🏗️ Structure</span>
+                <span class="fto-pill">📈 Trajectory</span>
+                <span class="fto-pill">🕳️ Pockets</span>
+                <span class="fto-pill">🔬 Analysis</span>
+                <span class="fto-pill">⚡ Events</span>
+                <span class="fto-pill">📄 Report</span>
             </div>
             </div>
             """,

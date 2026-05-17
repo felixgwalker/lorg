@@ -10,7 +10,7 @@ A collection of computational biology tools for genomic analysis, de-extinction 
 | `cnv-significance-assessor` | Scores copy number variants by size, gene content, dosage sensitivity, and population frequency |
 | `crispr-base-editor-window-visualiser` | Visualises editing windows for base editors across target sequences |
 | `erv-risk-mapper` | Maps endogenous retroviral element risk in genomic contexts |
-| `fdo` | Protein pocket dynamics pipeline — MD simulation, pocket detection, conservation, and ligandability |
+| `fto-allosteric-pocket-discoverer` | Protein pocket dynamics pipeline — MD simulation, pocket detection, conservation, and ligandability |
 | `genetic-rescue-viability-estimator` | Estimates viability outcomes for genetic rescue interventions |
 | `genomic-resurrection-scorer` | Multi-layer scoring tool for de-extinction feasibility with Next.js dashboard |
 | `guide-rna-off-target-scorer` | Scores gRNA off-target risk profiles |
