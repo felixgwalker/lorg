@@ -1,0 +1,13 @@
+element_id,mean_sequence_identity,motif_retention,combined_score,classification,identity_human,identity_mouse,identity_zebrafish,identity_fruitfly
+enhancer_01,0.7133,0.5,0.628,partially_conserved,1.0,0.96,0.9,0.28
+promoter_01,0.9644,0.625,0.8287,conserved,1.0,0.98,0.9733,0.94
+enhancer_02,0.7178,0.875,0.7807,conserved,1.0,0.8933,0.6967,0.5633
+silencer_01,0.4967,0.25,0.398,diverged,1.0,0.8,0.5,0.19
+enhancer_03,0.7187,0.875,0.7812,conserved,1.0,0.944,0.888,0.324
+promoter_02,0.935,0.75,0.861,conserved,1.0,0.965,0.935,0.905
+insulator_01,0.7037,0.625,0.6722,partially_conserved,1.0,0.8167,0.7611,0.5333
+enhancer_04,0.4694,0.375,0.4317,partially_conserved,1.0,0.7333,0.4333,0.2417
+promoter_03,0.9578,0.75,0.8747,conserved,1.0,0.98,0.96,0.9333
+enhancer_05,0.6367,0.5,0.582,partially_conserved,1.0,0.845,0.675,0.39
+silencer_02,0.4534,0.375,0.422,partially_conserved,1.0,0.6467,0.4867,0.2267
+enhancer_06,0.76,0.625,0.706,conserved,1.0,0.956,0.824,0.5

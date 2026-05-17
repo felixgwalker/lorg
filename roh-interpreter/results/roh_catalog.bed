@@ -1,0 +1,2 @@
+chrom	start	end	name	score	strand	individual_id	n_snps	length_bp	length_class	mean_homozygosity
+chr1	2254210	15079419	IND_01_LONG	944	.	IND_01	54	12825209	LONG	0.9444

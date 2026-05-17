@@ -1,0 +1,4 @@
+g1_chrom,g1_start,g1_end,g2_chrom,g2_start,g2_end,type,n_seeds,identity
+g1_chr1,0,6800,g2_chr1,0,6800,translocation,6786,1.0
+g1_chr2,0,3000,g2_chr2,0,3000,translocation,1472,1.0
+g1_chr3,2000,3200,g2_chr3,0,1200,translocation,1186,1.0

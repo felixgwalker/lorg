@@ -1,0 +1,5 @@
+variant_class,count,weight,weighted_contribution
+SNV,494,1,494
+SMALL_DEL,407,3,1221
+SMALL_INS,454,3,1362
+TOTAL,1355,,3077

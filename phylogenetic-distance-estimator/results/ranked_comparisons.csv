@@ -1,0 +1,11 @@
+rank,species_1,species_2,distance,normalized_distance
+1,Human,Chimpanzee,0.004011,0.010651
+2,Human,Gorilla,0.014138,0.037543
+3,Chimpanzee,Gorilla,0.018223,0.048391
+4,Human,Orangutan,0.073511,0.195211
+5,Chimpanzee,Orangutan,0.07793,0.206946
+6,Gorilla,Orangutan,0.089149,0.236737
+7,Human,Gibbon,0.310126,0.823547
+8,Chimpanzee,Gibbon,0.316203,0.839684
+9,Gorilla,Gibbon,0.325427,0.864179
+10,Orangutan,Gibbon,0.376574,1.0

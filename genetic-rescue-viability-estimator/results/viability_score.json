@@ -1,0 +1,10 @@
+{
+  "score": 0.0,
+  "grade": "F",
+  "interpretation": "Minimal or no viability improvement detected.",
+  "initial_F": 0.3484,
+  "final_mean_F": 0.4565,
+  "initial_mean_H": 0.6516,
+  "final_mean_H": 0.5435,
+  "F_reduction_pct": -31.05
+}

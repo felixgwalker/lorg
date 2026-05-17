@@ -1,0 +1,10 @@
+{
+  "n_genes_analyzed": 20,
+  "n_significant_positive_selection": 2,
+  "mean_omega": 0.4297,
+  "max_omega": 4.0342,
+  "significant_genes": [
+    "gene_01",
+    "gene_03"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "class_counts": {
+    "SNV": 494,
+    "SMALL_DEL": 407,
+    "SMALL_INS": 454
+  },
+  "total_edits": 1355,
+  "weighted_burden": 3077,
+  "normalized_burden_per_mb": 102566.67,
+  "total_genome_bp": 30000
+}

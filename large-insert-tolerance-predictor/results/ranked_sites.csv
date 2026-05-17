@@ -1,0 +1,11 @@
+rank,locus_name,chrom,start,end,gene_density_score,regulatory_score,repeat_score,complexity_score,total_score,rationale
+1,locus_C,chr2,25500,26500,20,0,0,0,20,low gene density
+2,locus_C,chr2,25700,26700,20,0,0,0,20,low gene density
+3,locus_C,chr2,25900,26900,20,0,0,0,20,low gene density
+4,locus_C,chr2,26100,27100,20,0,0,0,20,low gene density
+5,locus_C,chr2,26300,27300,20,0,0,0,20,low gene density
+6,locus_C,chr2,26500,27500,20,0,0,0,20,low gene density
+7,locus_C,chr2,26700,27700,20,0,0,0,20,low gene density
+8,locus_C,chr2,26900,27900,20,0,0,0,20,low gene density
+9,locus_C,chr2,27100,28100,20,0,0,0,20,low gene density
+10,locus_C,chr2,27300,28300,20,0,0,0,20,low gene density
