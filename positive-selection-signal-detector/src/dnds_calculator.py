@@ -1,5 +1,56 @@
+from dataclasses import dataclass
 import numpy as np
 from .genetic_code import CODON_TABLE, count_sites
+
+
+@dataclass
+class DNDSResult:
+    """Result of a pairwise dN/dS calculation."""
+    dN: float
+    dS: float
+    omega: float
+    n_sites_S: float  # average synonymous sites (S̄)
+    n_sites_N: float  # average non-synonymous sites (N̄)
+
+
+def calculate_dnds(seq1, seq2):
+    """Calculate dN/dS between two codon-aligned sequences using Nei-Gojobori (1986).
+
+    Steps:
+    1. Count synonymous (S) and non-synonymous (N) sites in each sequence;
+       average to give S̄ and N̄.
+    2. Count synonymous (Sd) and non-synonymous (Nd) differences between the
+       two sequences.
+    3. Apply Jukes-Cantor correction:
+           pS = Sd / S̄,  pN = Nd / N̄
+           dS = -3/4 * ln(1 - 4*pS/3)
+           dN = -3/4 * ln(1 - 4*pN/3)
+    4. omega = dN / dS.  If dS ≈ 0 and dN > 0 return np.inf; if dN ≈ 0
+       return 0.
+
+    Returns a DNDSResult dataclass.
+    """
+    S1, N1 = count_sites(seq1)
+    S2, N2 = count_sites(seq2)
+    S_bar = (S1 + S2) / 2.0
+    N_bar = (N1 + N2) / 2.0
+
+    Sd, Nd = count_differences(seq1, seq2)
+
+    pS = Sd / S_bar if S_bar > 0 else 0.0
+    pN = Nd / N_bar if N_bar > 0 else 0.0
+
+    dS = jukes_cantor(pS)
+    dN = jukes_cantor(pN)
+
+    if dS < 1e-9:
+        omega = np.inf if dN > 1e-9 else 0.0
+    elif dN < 1e-9:
+        omega = 0.0
+    else:
+        omega = dN / dS
+
+    return DNDSResult(dN=dN, dS=dS, omega=omega, n_sites_S=S_bar, n_sites_N=N_bar)
 
 
 def jukes_cantor(p):

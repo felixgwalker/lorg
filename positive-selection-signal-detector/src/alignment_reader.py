@@ -2,6 +2,88 @@ import os
 import numpy as np
 
 
+def read_codon_alignment(fasta_path):
+    """Parse a codon-aligned nucleotide FASTA file.
+
+    Returns a list of (name, seq) tuples.  Validates that:
+    - Every sequence length is a multiple of 3.
+    - All sequences have the same length (aligned).
+    - No gap characters break codon boundaries (gaps only at codon-triplet
+      positions, i.e. gap runs whose length is a multiple of 3 *and* aligned
+      to codon boundaries).
+
+    Raises ValueError on validation failure.
+    """
+    sequences = []
+    current_id = None
+    current_seq = []
+    with open(fasta_path, "r") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if current_id is not None:
+                    sequences.append((current_id, "".join(current_seq).upper()))
+                current_id = line[1:].split()[0]
+                current_seq = []
+            else:
+                current_seq.append(line.upper())
+    if current_id is not None:
+        sequences.append((current_id, "".join(current_seq).upper()))
+
+    if not sequences:
+        raise ValueError(f"No sequences found in {fasta_path}")
+
+    # Validate lengths
+    lengths = {len(seq) for _, seq in sequences}
+    if len(lengths) > 1:
+        raise ValueError(
+            f"Sequences in {fasta_path} have different lengths: {sorted(lengths)}"
+        )
+    aln_len = lengths.pop()
+    if aln_len % 3 != 0:
+        raise ValueError(
+            f"Alignment length {aln_len} is not a multiple of 3 in {fasta_path}"
+        )
+
+    # Validate that gaps do not break codon boundaries
+    for name, seq in sequences:
+        for codon_start in range(0, aln_len, 3):
+            codon = seq[codon_start:codon_start + 3]
+            gap_count = codon.count("-")
+            if 0 < gap_count < 3:
+                raise ValueError(
+                    f"Gap breaks codon boundary at position {codon_start} "
+                    f"in sequence '{name}' (codon: '{codon}')"
+                )
+
+    return sequences
+
+
+def make_demo_alignment():
+    """Return a short demo codon alignment as a list of (name, seq) tuples.
+
+    The alignment contains 5 sequences over 15 codons (45 nucleotides),
+    with a mix of synonymous and non-synonymous differences to exercise the
+    dN/dS machinery.
+    """
+    seqs = [
+        ("species_1", "ATGGCCAAAGTTCTGCAGCACGACTTCAACGGTTCGTAA"),
+        ("species_2", "ATGGCCAAAGTTCTGCAGCACGACTTCAACGGTTCGTAA"),
+        ("species_3", "ATGGCTAAAGTTTTGCAACACGACTTCAATGGCTCGTAA"),
+        ("species_4", "ATGGCCAAAGTTCTGCAGCACGATTTCAACGGTTCGTAA"),
+        ("species_5", "ATGGCCAAGGTTCTGCAGCATGACTTCAACGGTTCCTAA"),
+    ]
+    # Pad/trim so each is exactly 39 nt (13 codons, multiple of 3)
+    result = []
+    for name, seq in seqs:
+        # Ensure length is multiple of 3
+        trimmed = seq[: (len(seq) // 3) * 3]
+        result.append((name, trimmed))
+    return result
+
+
 def parse_fasta(path):
     sequences = {}
     current_id = None

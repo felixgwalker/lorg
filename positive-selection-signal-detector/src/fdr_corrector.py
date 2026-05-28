@@ -1,6 +1,34 @@
 import numpy as np
 
 
+def fdr_correct(p_values, method="bh"):
+    """Apply multiple-testing correction to a list of p-values.
+
+    Parameters
+    ----------
+    p_values : list of float
+        Raw p-values to correct.
+    method : str
+        Correction method.  Currently only Benjamini-Hochberg ('bh') is
+        supported.  Case-insensitive.
+
+    Returns
+    -------
+    list of float
+        FDR-adjusted p-values in the same order as the input.
+
+    Raises
+    ------
+    ValueError
+        If an unrecognised method is requested.
+    """
+    if method.lower() in ("bh", "benjamini-hochberg", "benjamini_hochberg"):
+        return benjamini_hochberg(p_values)
+    raise ValueError(
+        f"Unknown FDR method '{method}'. Supported methods: 'bh' (Benjamini-Hochberg)."
+    )
+
+
 def benjamini_hochberg(pvalues):
     n = len(pvalues)
     if n == 0:
