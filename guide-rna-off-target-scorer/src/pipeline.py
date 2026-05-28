@@ -14,7 +14,7 @@ def run_pipeline(
     from .off_target_finder import find_off_targets
     from .cfd_scorer import score_hits
     from .report import write_off_target_table, write_specificity_summary
-    from .plot import plot_manhattan
+    from .plot import plot_manhattan, plot_mismatch_heatmap
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -28,8 +28,12 @@ def run_pipeline(
     spec_path = write_specificity_summary(all_hits, guides, output_dir)
 
     plot_path = None
+    heatmap_path = None
     if not no_plot:
         plot_path = plot_manhattan(all_hits, output_dir, fmt=plot_fmt)
+        # plot_manhattan already calls plot_mismatch_heatmap internally;
+        # reconstruct the expected path for the result dict
+        heatmap_path = output_dir / f"mismatch_position_heatmap.{plot_fmt}"
 
     return {
         "n_guides": len(guides),
@@ -37,6 +41,7 @@ def run_pipeline(
         "off_target_table": str(ot_path),
         "specificity_summary": str(spec_path),
         "plot": str(plot_path) if plot_path else None,
+        "heatmap": str(heatmap_path) if heatmap_path else None,
     }
 
 
@@ -88,6 +93,8 @@ def main() -> int:
     print(f"Total hits (<=3 mismatches): {result['n_hits']}")
     print(f"Off-target table:      {result['off_target_table']}")
     print(f"Specificity summary:   {result['specificity_summary']}")
-    if result["plot"]:
+    if result.get("plot"):
         print(f"Manhattan plot:        {result['plot']}")
+    if result.get("heatmap"):
+        print(f"Mismatch heatmap:      {result['heatmap']}")
     return 0

@@ -5,12 +5,38 @@ from pathlib import Path
 
 KMER_LEN = 20
 
+# Ambiguity codes included: N stays N; standard complement table
+_COMP_TABLE = str.maketrans("ACGTacgtNn", "TGCAtgcaNn")
+
 
 def reverse_complement(seq: str) -> str:
-    comp = str.maketrans("ACGT", "TGCA")
-    return seq.translate(comp)[::-1]
+    """Return reverse complement; N maps to N, all standard bases handled."""
+    return seq.translate(_COMP_TABLE)[::-1]
 
 
+def build_genome_index(genome: dict[str, str]) -> dict[str, list[tuple[str, int, str]]]:
+    """Return dict mapping 20-mer -> list of (chrom, pos, strand).
+
+    Indexes both forward and reverse-complement strands.  Kmers containing N
+    are skipped so the index only holds unambiguous 20-mers.
+    """
+    index: dict[str, list[tuple[str, int, str]]] = {}
+    for chrom, seq in genome.items():
+        seq = seq.upper()
+        rc = reverse_complement(seq)
+        n = len(seq)
+        for i in range(n - KMER_LEN + 1):
+            fwd_kmer = seq[i:i + KMER_LEN]
+            if "N" not in fwd_kmer:
+                index.setdefault(fwd_kmer, []).append((chrom, i, "+"))
+            rev_pos = n - i - KMER_LEN
+            rev_kmer = rc[i:i + KMER_LEN]
+            if "N" not in rev_kmer:
+                index.setdefault(rev_kmer, []).append((chrom, rev_pos, "-"))
+    return index
+
+
+# Keep the old name as an alias so existing code continues to work
 def build_index(genome: dict[str, str]) -> dict[str, list[tuple[str, int, str]]]:
     """Return dict mapping 20-mer -> list of (chrom, pos, strand)."""
     index: dict[str, list[tuple[str, int, str]]] = {}
