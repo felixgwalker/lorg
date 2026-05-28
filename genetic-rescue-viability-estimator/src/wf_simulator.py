@@ -1,6 +1,53 @@
 import numpy as np
 
 
+def simulate_wright_fisher(
+    Ne: int,
+    n_gen: int,
+    initial_freq: float,
+    n_reps: int = 100,
+    seed: int = 42,
+) -> np.ndarray:
+    """Wright-Fisher allele frequency drift simulation.
+
+    Each generation the allele count is drawn from Binomial(2*Ne, p) where p
+    is the current frequency, modelling pure genetic drift.
+
+    Parameters
+    ----------
+    Ne          : effective population size.
+    n_gen       : number of generations to simulate.
+    initial_freq: starting allele frequency (in [0, 1]).
+    n_reps      : number of independent replicate trajectories.
+    seed        : random seed for reproducibility.
+
+    Returns
+    -------
+    np.ndarray of shape (n_reps, n_gen) containing the allele frequency at
+    each generation (generation 0 / initial state is NOT included so the
+    array has exactly n_gen columns, one per generation step).
+    """
+    rng = np.random.default_rng(seed)
+    Ne = max(1, int(Ne))
+    n_alleles = 2 * Ne
+
+    # Initialise frequencies: shape (n_reps,)
+    freqs = np.full(n_reps, float(initial_freq))
+
+    trajectories = np.zeros((n_reps, n_gen), dtype=float)
+
+    for gen in range(n_gen):
+        counts = rng.binomial(n=n_alleles, p=freqs)
+        freqs = counts / n_alleles
+        trajectories[:, gen] = freqs
+
+    return trajectories
+
+
+# ---------------------------------------------------------------------------
+# Legacy simulation functions used by the pipeline
+# ---------------------------------------------------------------------------
+
 def run_wf_simulation(
     initial_F,
     N_current,

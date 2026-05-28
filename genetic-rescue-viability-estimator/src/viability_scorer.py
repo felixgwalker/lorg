@@ -1,5 +1,78 @@
+from dataclasses import dataclass
 import numpy as np
 
+
+@dataclass
+class ViabilityResult:
+    delta_froh: float
+    froh_reduction_pct: float
+    viability_gain: float   # logistic function output in [0, 1]
+    recommended: bool
+    risk_category: str      # "low" | "moderate" | "high"
+    froh_before: float
+    froh_after: float
+    ne_before: float
+    ne_after: float
+
+
+def score_rescue(
+    froh_before: float,
+    froh_after: float,
+    ne_before: float,
+    ne_after: float,
+) -> ViabilityResult:
+    """Score the benefit of a genetic rescue intervention.
+
+    Parameters
+    ----------
+    froh_before : FROH of recipient population before rescue.
+    froh_after  : projected FROH after rescue / admixture.
+    ne_before   : effective population size before rescue.
+    ne_after    : projected effective population size after rescue.
+
+    Returns
+    -------
+    ViabilityResult dataclass with delta_froh, froh_reduction_pct,
+    viability_gain (logistic, range [0,1]), recommendation flag, and
+    risk_category for the post-rescue population.
+    """
+    delta_froh = float(froh_before - froh_after)
+
+    if froh_before > 0:
+        froh_reduction_pct = delta_froh / froh_before * 100.0
+    else:
+        froh_reduction_pct = 0.0
+
+    # Logistic viability gain: 1 / (1 + exp(-10 * (delta_froh - 0.1)))
+    # Centred at delta_froh = 0.1 with steep slope
+    exponent = -10.0 * (delta_froh - 0.1)
+    viability_gain = float(1.0 / (1.0 + np.exp(exponent)))
+
+    recommended = viability_gain > 0.15
+
+    if froh_after < 0.125:
+        risk_category = "low"
+    elif froh_after < 0.25:
+        risk_category = "moderate"
+    else:
+        risk_category = "high"
+
+    return ViabilityResult(
+        delta_froh=round(delta_froh, 6),
+        froh_reduction_pct=round(froh_reduction_pct, 4),
+        viability_gain=round(viability_gain, 6),
+        recommended=recommended,
+        risk_category=risk_category,
+        froh_before=round(float(froh_before), 6),
+        froh_after=round(float(froh_after), 6),
+        ne_before=float(ne_before),
+        ne_after=float(ne_after),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Legacy scoring used by the pipeline
+# ---------------------------------------------------------------------------
 
 GRADE_THRESHOLDS = [
     (80, "A", "Excellent viability improvement; rescue highly effective."),

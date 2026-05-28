@@ -1,12 +1,12 @@
 import os
 import numpy as np
 
-from .vcf_parser import parse_vcf, generate_synthetic_population
+from .vcf_parser import parse_vcf_legacy as parse_vcf, generate_synthetic_population
 from .froh_calculator import froh_from_population_data
 from .wf_simulator import run_wf_simulation, run_baseline_simulation
 from .viability_scorer import compute_viability_score
-from .report import write_froh_csv, write_trajectories_csv, write_viability_json
-from .plot import plot_trajectories, plot_distribution
+from .report import write_froh_csv, write_trajectories_csv, write_viability_json, write_summary_report
+from .plot import plot_trajectories, plot_distribution, plot_froh_comparison
 
 
 def run_pipeline(args):
@@ -65,12 +65,45 @@ def run_pipeline(args):
     traj_path = write_trajectories_csv(sim_result, args.output_dir)
     score_path = write_viability_json(score_result, args.output_dir)
 
+    params = {
+        "N_current": N_current,
+        "N_target": N_target,
+        "n_rescue": n_rescue,
+        "n_generations": n_generations,
+        "n_replicates": n_replicates,
+        "selection_coeff": selection_coeff,
+        "initial_F": round(initial_F, 4),
+    }
+    report_path = write_summary_report(population_data, sim_result, score_result,
+                                       args.output_dir, params=params)
+
     plot_paths = []
     if not getattr(args, "no_plot", False):
         fmt = getattr(args, "plot_format", "png")
+
+        # FROH comparison bars (before = F_initial, after = post-rescue estimate)
+        # Approximate post-rescue FROH by mixing rescue individuals (F ~0.01)
+        F_rescue = 0.01
+        froh_before = [d["F_initial"] for d in population_data]
+        froh_after = [
+            float(np.clip(
+                (N_current * d["F_initial"] + n_rescue * F_rescue) / (N_current + n_rescue),
+                0.0, 1.0
+            ))
+            for d in population_data
+        ]
+        individual_ids = [d["individual"] for d in population_data]
+        froh_plot_paths = plot_froh_comparison(
+            froh_before, froh_after,
+            individual_ids=individual_ids,
+            output_dir=args.output_dir,
+            fmt=fmt,
+        )
+        plot_paths.extend(froh_plot_paths)
+
         p1 = plot_trajectories(sim_result, baseline_result, args.output_dir, fmt=fmt)
         p2 = plot_distribution(sim_result, baseline_result, args.output_dir, fmt=fmt)
-        plot_paths = [p1, p2]
+        plot_paths.extend([p1, p2])
 
     return {
         "population_data": population_data,
@@ -80,6 +113,7 @@ def run_pipeline(args):
             "froh_csv": froh_path,
             "trajectories_csv": traj_path,
             "viability_json": score_path,
+            "summary_report": report_path,
             "plots": plot_paths,
         },
     }
@@ -111,7 +145,9 @@ def main():
 
     result = run_pipeline(args)
     sr = result["score_result"]
+    outputs = result["outputs"]
     print(f"Viability Score: {sr['score']:.1f}/100  Grade: {sr['grade']}")
     print(f"Interpretation: {sr['interpretation']}")
+    print(f"Summary report: {outputs['summary_report']}")
     print(f"Outputs written to: {args.output_dir}")
     return 0
