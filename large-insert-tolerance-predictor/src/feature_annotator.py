@@ -1,9 +1,92 @@
 import re
+from typing import List, Dict, Any, Optional
 
 
-def parse_gff3(gff3_path):
+# Feature type categories we care about
+_GENE_TYPES = {"gene", "ncRNA_gene", "pseudogene"}
+_EXON_TYPES = {"exon", "CDS"}
+_REGULATORY_TYPES = {"promoter", "enhancer", "CTCF_binding_site", "insulator",
+                     "transcription_factor_binding_site", "regulatory_region",
+                     "DNase_I_hypersensitive_site", "open_chromatin_region"}
+
+
+def annotate_locus(chrom: str, start: int, end: int,
+                   gff_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Find GFF3 features overlapping the given locus interval.
+
+    Looks for genes, exons/CDS, and regulatory elements.  Returns a list of
+    GenomicFeature dicts, each with keys:
+        feature_type, chrom, start, end, strand, name, attributes
+
+    If gff_path is None or the file has no overlapping features, returns an
+    empty list.
+    """
+    if not gff_path:
+        return []
+
+    features: List[Dict[str, Any]] = []
+    try:
+        with open(gff_path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("\t")
+                if len(parts) < 9:
+                    continue
+                feat_chrom = parts[0]
+                if feat_chrom != chrom:
+                    continue
+                try:
+                    feat_start = int(parts[3])
+                    feat_end = int(parts[4])
+                except ValueError:
+                    continue
+                # Overlap check (GFF3 coords are 1-based inclusive)
+                if feat_end < start + 1 or feat_start > end:
+                    continue
+                feat_type = parts[2]
+                strand = parts[6]
+                raw_attrs = parts[8]
+
+                # Determine broad category
+                if feat_type in _GENE_TYPES:
+                    category = "gene"
+                elif feat_type in _EXON_TYPES:
+                    category = "exon"
+                elif feat_type in _REGULATORY_TYPES:
+                    category = "regulatory"
+                else:
+                    category = feat_type
+
+                # Parse Name/ID from attributes
+                name = feat_type
+                for token in raw_attrs.split(";"):
+                    token = token.strip()
+                    if token.startswith("Name=") or token.startswith("gene_name="):
+                        name = token.split("=", 1)[1]
+                        break
+                    if token.startswith("ID=") and name == feat_type:
+                        name = token.split("=", 1)[1]
+
+                features.append({
+                    "feature_type": category,
+                    "chrom": feat_chrom,
+                    "start": feat_start,
+                    "end": feat_end,
+                    "strand": strand,
+                    "name": name,
+                    "attributes": raw_attrs,
+                })
+    except OSError:
+        return []
+
+    return features
+
+
+def parse_gff3(gff_path):
     genes = []
-    with open(gff3_path) as fh:
+    with open(gff_path) as fh:
         for line in fh:
             line = line.strip()
             if not line or line.startswith("#"):
