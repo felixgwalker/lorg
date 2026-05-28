@@ -6,12 +6,20 @@ import logging
 import sys
 from pathlib import Path
 
-from src import __version__
-from src.alignment_reader import generate_demo_alignment, read_alignment, validate_alignment
-from src.distance_calculator import compute_distance_matrix, normalize_matrix
-from src.nj_tree import build_nj_tree
-from src.plot import plot_heatmap_dendrogram
-from src.report import write_distance_matrix, write_newick, write_ranked_comparisons
+try:
+    from src import __version__
+    from src.alignment_reader import generate_demo_alignment, read_alignment, validate_alignment
+    from src.distance_calculator import compute_distance_matrix, normalize_matrix
+    from src.nj_tree import build_nj_tree
+    from src.plot import plot_heatmap_dendrogram
+    from src.report import write_distance_matrix, write_newick, write_ranked_comparisons
+except ImportError:
+    from __init__ import __version__  # type: ignore[no-redef]
+    from alignment_reader import generate_demo_alignment, read_alignment, validate_alignment  # type: ignore[no-redef]
+    from distance_calculator import compute_distance_matrix, normalize_matrix  # type: ignore[no-redef]
+    from nj_tree import build_nj_tree  # type: ignore[no-redef]
+    from plot import plot_heatmap_dendrogram  # type: ignore[no-redef]
+    from report import write_distance_matrix, write_newick, write_ranked_comparisons  # type: ignore[no-redef]
 
 logger = logging.getLogger(__name__)
 
