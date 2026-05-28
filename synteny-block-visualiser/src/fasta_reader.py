@@ -2,6 +2,7 @@ import random
 
 
 def parse_fasta(fasta_path):
+    """Parse a FASTA file and return {seq_name: sequence_str}."""
     sequences = {}
     current = None
     parts = []
@@ -21,30 +22,52 @@ def parse_fasta(fasta_path):
 
 
 def make_demo_genomes():
-    random.seed(7)
+    """Return two synthetic genome dicts demonstrating synteny rearrangements.
+
+    Genome 1: 3 chromosomes x 100 kb each.
+    Genome 2: genome1 with:
+      - chromosome-scale inversion of chr2 (entire 100 kb reversed)
+      - translocation of 20 kb from chr1 (positions 40000-60000) inserted at
+        start of chr3 (chr3 original sequence follows)
+      - ~2% random SNP noise applied across all chromosomes
+    """
+    random.seed(42)
     bases = list("ACGT")
+    chrom_len = 100_000
 
     def rand_seq(n):
         return "".join(random.choices(bases, k=n))
 
-    block_a = rand_seq(3000)
-    block_b = rand_seq(2000)
-    inversion_block = rand_seq(1500)
-    translocation_block = rand_seq(1200)
-    filler = [rand_seq(1000), rand_seq(800), rand_seq(600), rand_seq(900)]
+    def apply_snp_noise(seq, rate=0.02):
+        seq = list(seq)
+        for i in range(len(seq)):
+            if random.random() < rate:
+                seq[i] = random.choice([b for b in bases if b != seq[i]])
+        return "".join(seq)
+
+    chr1 = rand_seq(chrom_len)
+    chr2 = rand_seq(chrom_len)
+    chr3 = rand_seq(chrom_len)
 
     genome1 = {
-        "g1_chr1": filler[0] + block_a + filler[1] + block_b,
-        "g1_chr2": filler[2] + inversion_block + filler[3],
-        "g1_chr3": rand_seq(2000) + translocation_block + rand_seq(800),
+        "g1_chr1": chr1,
+        "g1_chr2": chr2,
+        "g1_chr3": chr3,
     }
 
-    inv_rc = _reverse_complement(inversion_block)
+    # Chromosome-scale inversion on chr2: reverse-complement the whole thing
+    chr2_inverted = _reverse_complement(chr2)
 
+    # Translocation: move 20 kb from chr1 (positions 40000-60000) to start of chr3
+    trans_block = chr1[40_000:60_000]
+    chr1_after_trans = chr1[:40_000] + chr1[60_000:]   # chr1 with the 20 kb removed
+    chr3_after_trans = trans_block + chr3               # chr3 with the 20 kb prepended
+
+    # Apply ~2% SNP noise
     genome2 = {
-        "g2_chr1": filler[0] + block_a + filler[1] + block_b,
-        "g2_chr2": filler[2] + inv_rc + filler[3],
-        "g2_chr3": translocation_block + rand_seq(2000) + rand_seq(800),
+        "g2_chr1": apply_snp_noise(chr1_after_trans),
+        "g2_chr2": apply_snp_noise(chr2_inverted),
+        "g2_chr3": apply_snp_noise(chr3_after_trans),
     }
 
     return genome1, genome2

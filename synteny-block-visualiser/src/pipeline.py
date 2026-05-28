@@ -1,13 +1,22 @@
 import os
 import sys
 
-from .fasta_reader import parse_fasta, make_demo_genomes
-from .kmer_indexer import build_kmer_index, find_unique_seeds
-from .chain_builder import chain_seeds
-from .rearrangement_detector import classify_blocks, summarize_rearrangements
-from .report import write_synteny_blocks, write_rearrangements
-from .dot_plotter import plot_dotplot
-from .ribbon_plotter import plot_ribbon
+try:
+    from .fasta_reader import parse_fasta, make_demo_genomes
+    from .kmer_indexer import build_kmer_index, find_unique_seeds
+    from .chain_builder import chain_seeds
+    from .rearrangement_detector import classify_blocks, summarize_rearrangements
+    from .report import write_synteny_blocks, write_rearrangements
+    from .dot_plotter import plot_dotplot
+    from .ribbon_plotter import plot_ribbon
+except ImportError:
+    from fasta_reader import parse_fasta, make_demo_genomes
+    from kmer_indexer import build_kmer_index, find_unique_seeds
+    from chain_builder import chain_seeds
+    from rearrangement_detector import classify_blocks, summarize_rearrangements
+    from report import write_synteny_blocks, write_rearrangements
+    from dot_plotter import plot_dotplot
+    from ribbon_plotter import plot_ribbon
 
 
 def run_pipeline(args):
