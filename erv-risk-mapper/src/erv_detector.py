@@ -53,9 +53,51 @@ def _find_longest_orf(window: str, min_aa: int = 500) -> int:
     return max_orf_bp
 
 
+def _deduplicate_hits(hits: list[dict]) -> list[dict]:
+    """Remove duplicate overlapping hits on the same chromosome.
+
+    When two adjacent windows both detect an ERV hit (possible because
+    STEP_SIZE < WINDOW_SIZE), keep only the hit with more k-mer evidence.
+    Two hits are considered overlapping when they share the same chromosome
+    and their intervals overlap by at least 1 bp.
+    """
+    if not hits:
+        return hits
+
+    # Sort by chrom then start position
+    sorted_hits = sorted(hits, key=lambda h: (h["chrom"], h["start"]))
+    merged: list[dict] = []
+
+    for hit in sorted_hits:
+        if (
+            merged
+            and merged[-1]["chrom"] == hit["chrom"]
+            and merged[-1]["end"] > hit["start"]  # overlap
+        ):
+            # Keep the hit with higher k-mer evidence; on tie, prefer the one
+            # with the better LTR type (full > partial > solo).
+            prev = merged[-1]
+            ltr_rank = {"full": 2, "partial": 1, "solo": 0}
+            prev_score = (prev["kmer_hits"], ltr_rank.get(prev["ltr_type"], 0))
+            curr_score = (hit["kmer_hits"], ltr_rank.get(hit["ltr_type"], 0))
+            if curr_score > prev_score:
+                merged[-1] = hit
+            # else keep prev unchanged
+        else:
+            merged.append(hit)
+
+    return merged
+
+
 def detect_erv_windows(genome: dict[str, str]) -> list[dict]:
-    """Scan genome in windows and return ERV hit records."""
-    hits = []
+    """Scan genome in sliding windows and return de-duplicated ERV hit records.
+
+    Each hit dict contains:
+        chrom, start, end, family, ltr_type, longest_orf_bp,
+        kmer_hits, has_poly_a, gc_content, window_len
+    """
+    raw_hits: list[dict] = []
+
     for chrom, seq in genome.items():
         n = len(seq)
         pos = 0
@@ -76,7 +118,7 @@ def detect_erv_windows(genome: dict[str, str]) -> list[dict]:
                 has_poly_a = POLY_A_SIGNAL in window
                 longest_orf_bp = _find_longest_orf(window)
                 gc = (window.count("G") + window.count("C")) / max(len(window), 1)
-                hits.append({
+                raw_hits.append({
                     "chrom": chrom,
                     "start": pos,
                     "end": end,
@@ -89,6 +131,9 @@ def detect_erv_windows(genome: dict[str, str]) -> list[dict]:
                     "window_len": end - pos,
                 })
 
+            # Advance by STEP_SIZE but never go past the chromosome end
+            if end == n:
+                break
             pos += STEP_SIZE
 
-    return hits
+    return _deduplicate_hits(raw_hits)

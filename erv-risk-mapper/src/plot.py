@@ -14,7 +14,12 @@ TIER_ORDER = ["low", "moderate", "high"]
 
 
 def plot_chromosome_density(hits: list[dict], output_dir: Path, fmt: str = "png") -> Path:
-    out_path = output_dir / f"erv_chromosome_density.{fmt}"
+    """Create a bar chart of ERV density per chromosome, coloured by risk tier.
+
+    The figure is always saved as both PNG and SVG.  The primary return path
+    uses *fmt* so callers that only check one format still get a valid path.
+    """
+    primary_path = output_dir / f"erv_chromosome_density.{fmt}"
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
@@ -23,13 +28,15 @@ def plot_chromosome_density(hits: list[dict], output_dir: Path, fmt: str = "png"
                 transform=ax.transAxes, fontsize=14)
         ax.set_title("ERV Chromosome Density")
         fig.tight_layout()
-        fig.savefig(out_path, dpi=150)
+        for ext in ("png", "svg"):
+            fig.savefig(output_dir / f"erv_chromosome_density.{ext}", dpi=150)
         plt.close(fig)
-        return out_path
+        return primary_path
 
     df = pd.DataFrame(hits)
     chroms = sorted(df["chrom"].unique(), key=lambda c: (
-        int(c.replace("chr", "")) if c.replace("chr", "").isdigit() else 999
+        int(c.replace("chr", "")) if c.replace("chr", "").isdigit() else 999,
+        c,
     ))
 
     counts: dict[str, dict[str, int]] = {c: defaultdict(int) for c in chroms}
@@ -66,6 +73,8 @@ def plot_chromosome_density(hits: list[dict], output_dir: Path, fmt: str = "png"
     ax.legend(handles=legend_patches, loc="upper right", fontsize=10)
 
     fig.tight_layout()
-    fig.savefig(out_path, dpi=150)
+    # Save in both PNG and SVG regardless of the requested primary format
+    for ext in ("png", "svg"):
+        fig.savefig(output_dir / f"erv_chromosome_density.{ext}", dpi=150)
     plt.close(fig)
-    return out_path
+    return primary_path
