@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from src import __version__
-from src.analyser import analyse_sequence
+from src.analyser import analyse_sequence, PamInfo
 from src.config import (
     DEFAULT_BYSTANDER_THRESHOLD,
     DEFAULT_OUTPUT_PREFIX,
@@ -24,8 +24,11 @@ from src.config import (
 from src.diagram import generate_duplex_diagram
 from src.writer import (
     write_bystander_warnings,
+    write_bystander_tsv,
     write_editability_csv,
     write_outcomes_csv,
+    write_target_summary_tsv,
+    write_window_coords_tsv,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,28 +64,39 @@ def run_pipeline(
 
     Returns:
         Structured dict with keys:
-            "positions"           → list[PositionInfo]
-            "editor"              → BaseEditorProfile
-            "pam_seq"             → str
-            "output_files"        → dict[str, str]
-            "bystander_warnings"  → list[str]
-            "pipeline_version"    → str
+            "positions"                → list[PositionInfo]
+            "editor"                   → BaseEditorProfile
+            "pam_seq"                  → str
+            "pam_info"                 → PamInfo
+            "output_files"             → dict[str, str]  (keys: duplex_png,
+                                           duplex_svg, duplex_html,
+                                           editability_csv, outcomes_csv,
+                                           bystander_txt, target_summary_tsv,
+                                           window_coords_tsv,
+                                           bystander_predictions_tsv)
+            "bystander_warnings"       → list[str]
+            "pipeline_version"         → str
     """
     Path(output_prefix).parent.mkdir(parents=True, exist_ok=True)
 
     guide  = guide_rna.upper().replace("U", "T").strip()
     target = target_dna.upper().replace("U", "T").strip()
-    pam_seq = target[20:23] if len(target) >= 23 else "NGG"
 
     logger.info("=== CRISPR Base Editor Window Visualiser v%s ===", __version__)
     logger.info("Editor  : %s  (%s)", editor.name, editor.description)
     logger.info("Window  : positions %d–%d (PAM-distal indexing)", editor.window_start, editor.window_end)
     logger.info("Guide   : 5'-%s-3'", guide)
-    logger.info("Target  : 5'-%s[%s]-3'", target[:20], pam_seq)
 
     # Step 1 — Analyse
     logger.info("Step 1/4 — Analysing sequence...")
-    positions = analyse_sequence(guide, target, editor, target_position=target_position)
+    positions, pam_info = analyse_sequence(guide, target, editor, target_position=target_position)
+    pam_seq = pam_info.pam_seq
+
+    logger.info("Target  : 5'-%s[%s]-3'", target[:20], pam_seq)
+    logger.info(
+        "PAM     : %s (required: %s) — %s",
+        pam_seq, pam_info.pam_pattern, "OK" if pam_info.pam_ok else "MISMATCH",
+    )
 
     n_primary   = sum(1 for p in positions if p.is_primary_target)
     n_bystander = sum(1 for p in positions if p.is_bystander)
@@ -99,11 +113,12 @@ def run_pipeline(
     else:
         logger.info("Step 2/4 — Rendering duplex diagram...")
         try:
-            png_path, svg_path = generate_duplex_diagram(
-                positions, editor, pam_seq, output_prefix
+            png_path, svg_path, html_path = generate_duplex_diagram(
+                positions, editor, pam_seq, output_prefix, pam_info=pam_info
             )
-            output_files["duplex_png"] = str(png_path)
-            output_files["duplex_svg"] = str(svg_path)
+            output_files["duplex_png"]  = str(png_path)
+            output_files["duplex_svg"]  = str(svg_path)
+            output_files["duplex_html"] = str(html_path)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Diagram rendering failed: %s.  Continuing.", exc)
 
@@ -122,12 +137,28 @@ def run_pipeline(
     )
     output_files["bystander_txt"] = str(by_path)
 
+    # TSV outputs
+    summary_path = write_target_summary_tsv(
+        positions, editor, pam_info, output_prefix,
+        guide_rna=guide, target_dna=target,
+    )
+    output_files["target_summary_tsv"] = str(summary_path)
+
+    window_path = write_window_coords_tsv(positions, editor, output_prefix, guide_rna=guide)
+    output_files["window_coords_tsv"] = str(window_path)
+
+    bystander_tsv_path = write_bystander_tsv(
+        positions, editor, bystander_threshold, output_prefix
+    )
+    output_files["bystander_predictions_tsv"] = str(bystander_tsv_path)
+
     logger.info("Done.  Output prefix: %s", output_prefix)
 
     return {
         "positions":          positions,
         "editor":             editor,
         "pam_seq":            pam_seq,
+        "pam_info":           pam_info,
         "output_files":       output_files,
         "bystander_warnings": by_lines,
         "pipeline_version":   __version__,

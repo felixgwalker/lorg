@@ -9,11 +9,10 @@ in-window non-editable, or outside the editing window.
 from __future__ import annotations
 
 import logging
-import sys
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-from src.config import BaseEditorProfile
+from src.config import BaseEditorProfile, get_pam_requirement, pam_matches
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +21,15 @@ _COMPLEMENT: dict[str, str] = {
     "A": "T", "T": "A", "G": "C", "C": "G", "N": "N",
     "a": "t", "t": "a", "g": "c", "c": "g", "n": "n",
 }
+
+
+@dataclass
+class PamInfo:
+    """PAM sequence annotation for a guide–target pair."""
+
+    pam_seq: str        # raw PAM sequence extracted from target_dna (positions 21–23+)
+    pam_pattern: str    # required PAM pattern for this editor (e.g. 'NGG' or 'NG')
+    pam_ok: bool        # True if pam_seq satisfies pam_pattern
 
 
 @dataclass
@@ -46,7 +54,7 @@ def analyse_sequence(
     target_dna: str,
     editor: BaseEditorProfile,
     target_position: Optional[int] = None,
-) -> List[PositionInfo]:
+) -> Tuple[List[PositionInfo], PamInfo]:
     """
     Map the base editor activity window onto the guide–target duplex.
 
@@ -57,6 +65,11 @@ def analyse_sequence(
     highest relative efficiency is designated the primary target unless
     *target_position* is supplied explicitly.
 
+    The editing window is defined by the editor's window_start and window_end
+    (1-indexed from PAM-distal end):
+      - Standard editors (CBE, ABE): positions 4–8 (or as declared in profile)
+      - NG-variant editors (CBE-NG, ABE-NG): same window positions but NG PAM
+
     Args:
         guide_rna:        20-nt protospacer sequence, 5'→3' (DNA or RNA alphabet).
         target_dna:       Non-template strand including PAM, 5'→3' (DNA alphabet).
@@ -66,7 +79,9 @@ def analyse_sequence(
                           edit.  Overrides automatic selection when provided.
 
     Returns:
-        List of 20 PositionInfo objects (index 0 = position 1).
+        Tuple of:
+          - List of 20 PositionInfo objects (index 0 = position 1).
+          - PamInfo describing the PAM sequence and whether it matches the editor.
 
     Raises:
         ValueError: On invalid sequence lengths or out-of-range target_position.
@@ -84,6 +99,22 @@ def analyse_sequence(
         )
 
     protospacer = target[:20]
+
+    # ── PAM extraction and matching ──────────────────────────────────────────
+    pam_pattern = get_pam_requirement(editor.name)
+    pam_len = len(pam_pattern)
+    extracted_pam = target[20: 20 + pam_len] if len(target) >= 20 + pam_len else target[20:]
+    pam_ok = pam_matches(extracted_pam, pam_pattern) if extracted_pam else False
+    pam_info = PamInfo(
+        pam_seq=extracted_pam or "N/A",
+        pam_pattern=pam_pattern,
+        pam_ok=pam_ok,
+    )
+    if not pam_ok:
+        logger.warning(
+            "PAM '%s' does not match required pattern '%s' for editor %s.",
+            extracted_pam or "(none)", pam_pattern, editor.name,
+        )
 
     # Warn on guide/protospacer mismatches (tolerated — use protospacer)
     mismatches = [
@@ -164,4 +195,4 @@ def analyse_sequence(
             bystander_risk_score=bsr,
         ))
 
-    return positions
+    return positions, pam_info

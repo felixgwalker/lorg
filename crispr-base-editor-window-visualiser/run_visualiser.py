@@ -21,6 +21,13 @@ Full usage example:
         --target-position 5 \\
         --bystander-threshold 0.05
 
+Named-argument form:
+    python run_visualiser.py \\
+        --guide GCACTGACCTGAGTTCAGTG \\
+        --sequence GCACTGACCTGAGTTCAGTGNGG \\
+        --editor-type ABE8e \\
+        --output-dir results/
+
 Custom window:
     python run_visualiser.py \\
         ATCGATCGATCGATCGATCG \\
@@ -29,6 +36,10 @@ Custom window:
         --editor-class ABE \\
         --window-start 3 \\
         --window-end 8
+
+Demo mode (hardcoded example, no sequences required):
+    python run_visualiser.py --demo
+    python run_visualiser.py --demo --output-dir results/demo/
 
 List all built-in editors:
     python run_visualiser.py --list-editors
@@ -56,7 +67,9 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "Built-in editors: ABE7.10, ABE8e, BE3, BE4max, evoAPOBEC, AncBE4max\n"
+            "Built-in editors: ABE7.10, ABE8e, BE3, BE4max, evoAPOBEC, AncBE4max, CBE-NG, ABE-NG\n"
+            "  Standard editors (ABE/CBE): require NGG PAM; window positions 4-8.\n"
+            "  NG-variant editors (CBE-NG/ABE-NG): accept relaxed NG PAM; window 4-8.\n"
             "Use 'custom' as EDITOR together with --editor-class, --window-start, "
             "--window-end for a non-standard window.\n\n"
             "Position numbering: 1 = PAM-distal (5' end of protospacer), "
@@ -72,7 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "20-nt guide RNA protospacer sequence, 5'→3' "
             "(DNA or RNA alphabet; U and T are treated as equivalent).  "
-            "Omit when using --list-editors."
+            "Omit when using --list-editors or --demo.  "
+            "Alternatively use --guide."
         ),
     )
     parser.add_argument(
@@ -81,7 +95,8 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         help=(
             "Target DNA non-template strand, 5'→3', including PAM "
-            "(e.g. 20-nt protospacer + NGG).  Minimum length: 20 nt."
+            "(e.g. 20-nt protospacer + NGG).  Minimum length: 20 nt.  "
+            "Alternatively use --sequence."
         ),
     )
     parser.add_argument(
@@ -90,7 +105,42 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         help=(
             "Base editor identifier.  Supported: ABE7.10, ABE8e, BE3, BE4max, "
-            "evoAPOBEC, AncBE4max, or 'custom'."
+            "evoAPOBEC, AncBE4max, CBE-NG, ABE-NG, or 'custom'.  "
+            "Alternatively use --editor-type."
+        ),
+    )
+
+    # ── Named sequence/editor arguments (alternative to positional) ───────
+    parser.add_argument(
+        "--guide",
+        metavar="SEQ",
+        dest="guide_named",
+        default=None,
+        help=(
+            "20-nt guide RNA protospacer, 5'→3'.  "
+            "Alternative to the GUIDE positional argument."
+        ),
+    )
+    parser.add_argument(
+        "--sequence",
+        metavar="SEQ",
+        dest="sequence_named",
+        default=None,
+        help=(
+            "Target DNA sequence including PAM, 5'→3'.  "
+            "Alternative to the TARGET positional argument."
+        ),
+    )
+    parser.add_argument(
+        "--editor-type",
+        metavar="EDITOR",
+        dest="editor_type_named",
+        default=None,
+        help=(
+            "Base editor identifier.  "
+            "Alternative to the EDITOR positional argument.  "
+            "Supported: ABE7.10, ABE8e, BE3, BE4max, "
+            "evoAPOBEC, AncBE4max, CBE-NG, ABE-NG, custom."
         ),
     )
 
@@ -98,14 +148,37 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-o", "--output",
         metavar="PREFIX",
-        default="be_output",
+        default=None,
         dest="output_prefix",
         help=(
             "Output file prefix, including directory (default: be_output).  "
-            "Four files are written: "
-            "<prefix>_duplex.png, <prefix>_duplex.svg, "
+            "Files written: "
+            "<prefix>_duplex.png, <prefix>_duplex.svg, <prefix>_duplex.html, "
             "<prefix>_editability.csv, <prefix>_outcomes.csv, "
-            "<prefix>_bystander_warnings.txt."
+            "<prefix>_bystander_warnings.txt, <prefix>_target_summary.tsv, "
+            "<prefix>_window_coords.tsv, <prefix>_bystander_predictions.tsv."
+        ),
+    )
+    parser.add_argument(
+        "--output-dir",
+        metavar="DIR",
+        dest="output_dir",
+        default=None,
+        help=(
+            "Output directory.  When provided, the output prefix is set to "
+            "<DIR>/be_output (or <DIR>/demo_output in demo mode).  "
+            "Takes precedence over -o/--output when both are given."
+        ),
+    )
+
+    # ── Demo mode ─────────────────────────────────────────────────────────
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help=(
+            "Run in demo mode using a hardcoded example guide and target "
+            "sequence (CBE BE4max, guide with a C at position 5).  "
+            "No GUIDE/TARGET/EDITOR arguments are required."
         ),
     )
 
@@ -192,12 +265,36 @@ def build_parser() -> argparse.ArgumentParser:
 # Validation
 # ---------------------------------------------------------------------------
 
+def merge_named_args(args: argparse.Namespace) -> None:
+    """
+    Merge --guide/--sequence/--editor-type named args into the positional slots
+    if the positional slots are empty.  Named args take precedence when both
+    positional and named forms are provided.
+
+    Also resolves --output-dir into output_prefix.
+    """
+    if args.guide_named:
+        args.guide_rna = args.guide_named
+    if args.sequence_named:
+        args.target_dna = args.sequence_named
+    if args.editor_type_named:
+        args.editor = args.editor_type_named
+
+    # Resolve output_prefix from --output-dir / -o / default
+    if args.output_dir:
+        import os
+        stem = "demo_output" if getattr(args, "demo", False) else "be_output"
+        args.output_prefix = os.path.join(args.output_dir, stem)
+    elif args.output_prefix is None:
+        args.output_prefix = "be_output"
+
+
 def validate_args(args: argparse.Namespace) -> None:
-    if args.list_editors:
+    if args.list_editors or getattr(args, "demo", False):
         return
 
     if not args.guide_rna:
-        _fatal("GUIDE is required.  Pass --list-editors to see available editors.")
+        _fatal("GUIDE is required.  Pass --list-editors to see available editors, or --demo to run a demo.")
     if not args.target_dna:
         _fatal("TARGET is required.")
     if not args.editor:
@@ -337,11 +434,15 @@ def print_summary(result: dict, quiet: bool) -> None:
     print()
     print("  Output files:")
     labels = {
-        "duplex_png":      "  Duplex PNG         ->",
-        "duplex_svg":      "  Duplex SVG         ->",
-        "editability_csv": "  Editability CSV    ->",
-        "outcomes_csv":    "  Outcomes CSV       ->",
-        "bystander_txt":   "  Bystander TXT      ->",
+        "duplex_png":               "  Duplex PNG              ->",
+        "duplex_svg":               "  Duplex SVG              ->",
+        "duplex_html":              "  Duplex HTML             ->",
+        "editability_csv":          "  Editability CSV         ->",
+        "outcomes_csv":             "  Outcomes CSV            ->",
+        "bystander_txt":            "  Bystander TXT           ->",
+        "target_summary_tsv":       "  Target summary TSV      ->",
+        "window_coords_tsv":        "  Window coords TSV       ->",
+        "bystander_predictions_tsv":"  Bystander pred. TSV     ->",
     }
     for key, label in labels.items():
         if key in out_files:
@@ -363,23 +464,32 @@ def main(argv: list[str] | None = None) -> int:
         stream=sys.stderr,
     )
 
+    # Merge --guide/--sequence/--editor-type into positional slots and
+    # resolve --output-dir into output_prefix.
+    merge_named_args(args)
+
     if args.list_editors:
         from src.config import EDITOR_PROFILES
         print("\nBuilt-in base editor profiles:\n")
-        header = f"  {'Name':<12}  {'Class':<5}  {'Window':<8}  Description"
+        header = f"  {'Name':<12}  {'Class':<5}  {'Window':<8}  {'PAM':<5}  Description"
         print(header)
         print("  " + "-" * (len(header) - 2))
+        from src.config import get_pam_requirement
         for name, profile in EDITOR_PROFILES.items():
+            pam_req = get_pam_requirement(name)
             print(
                 f"  {name:<12}  {profile.editor_class:<5}  "
                 f"{profile.window_start}–{profile.window_end:<6}  "
-                f"{profile.description}"
+                f"{pam_req:<5}  {profile.description}"
             )
         print(
-            "\n  custom        ABE/CBE  user-defined  "
+            "\n  custom        ABE/CBE  user-defined  NGG    "
             "requires --editor-class --window-start --window-end\n"
         )
         return 0
+
+    if getattr(args, "demo", False):
+        return _run_demo(args)
 
     validate_args(args)
     editor = resolve_editor(args)
@@ -404,6 +514,95 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print_summary(result, args.quiet)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Demo mode
+# ---------------------------------------------------------------------------
+
+# Hardcoded demo sequences.
+#
+# CBE demo (BE4max, C→T):
+#   Guide: AAAACGCAAGTGCGTTCAGT
+#   Positions (1-indexed, PAM-distal):
+#     pos 5 = C  (primary target, highest efficiency in window 4-8)
+#     pos 7 = C  (bystander)
+#   Window 4–8 contains: A(4), C(5), G(6), C(7), A(8)
+#
+# ABE demo (ABE8e, A→G):
+#   Guide: TTTTAGTAACGCTTACAGTG
+#   Positions:
+#     pos 5 = A  (primary target)
+#     pos 7 = A  (bystander)
+#   Window 4–8 contains: A(4), A(5), G(6), A(7), C(8)
+
+_DEMO_GUIDE  = "AAAACGCAAGTGCGTTCAGT"   # C at pos 5 (primary) and pos 7 (bystander)
+_DEMO_TARGET = "AAAACGCAAGTGCGTTCAGTNGG"
+_DEMO_EDITOR = "BE4max"
+
+_DEMO_GUIDE_ABE  = "TTTAAGTAACGCTTACAGTG"  # A at pos 4,5,8 — primary=5, bystanders=4,8
+_DEMO_TARGET_ABE = "TTTAAGTAACGCTTACAGTGNGG"
+_DEMO_EDITOR_ABE = "ABE8e"
+
+
+def _run_demo(args: argparse.Namespace) -> int:
+    """Run the full pipeline on a hardcoded demo example and print results."""
+    from src.config import EDITOR_PROFILES
+    from src.pipeline import run_pipeline
+
+    print()
+    print("=" * 64)
+    print("  CRISPR Base Editor Window Visualiser — DEMO MODE")
+    print("=" * 64)
+    print()
+    print("  Demo 1: CBE (BE4max)  -- C->T editing")
+    print(f"    Guide  : 5'-{_DEMO_GUIDE}-3'")
+    print(f"    Target : 5'-{_DEMO_TARGET}-3'")
+    print(f"    Editor : {_DEMO_EDITOR}")
+    print()
+
+    output_prefix = args.output_prefix if args.output_prefix else "demo_output"
+    output_prefix_cbe = output_prefix + "_cbe"
+    output_prefix_abe = output_prefix + "_abe"
+
+    editor_cbe = EDITOR_PROFILES[_DEMO_EDITOR]
+    editor_abe = EDITOR_PROFILES[_DEMO_EDITOR_ABE]
+
+    try:
+        result_cbe = run_pipeline(
+            guide_rna=_DEMO_GUIDE,
+            target_dna=_DEMO_TARGET,
+            editor=editor_cbe,
+            output_prefix=output_prefix_cbe,
+            no_diagram=args.no_diagram,
+        )
+        print_summary(result_cbe, quiet=False)
+    except Exception as exc:  # noqa: BLE001
+        print(f"ERROR in CBE demo: {exc}", file=sys.stderr)
+        return 1
+
+    print()
+    print("  Demo 2: ABE (ABE8e)  -- A->G editing")
+    print(f"    Guide  : 5'-{_DEMO_GUIDE_ABE}-3'")
+    print(f"    Target : 5'-{_DEMO_TARGET_ABE}-3'")
+    print(f"    Editor : {_DEMO_EDITOR_ABE}")
+    print(f"    (A at positions 4, 5, 8 in window 4-8; pos 5 = primary)")
+    print()
+
+    try:
+        result_abe = run_pipeline(
+            guide_rna=_DEMO_GUIDE_ABE,
+            target_dna=_DEMO_TARGET_ABE,
+            editor=editor_abe,
+            output_prefix=output_prefix_abe,
+            no_diagram=args.no_diagram,
+        )
+        print_summary(result_abe, quiet=False)
+    except Exception as exc:  # noqa: BLE001
+        print(f"ERROR in ABE demo: {exc}", file=sys.stderr)
+        return 1
+
     return 0
 
 

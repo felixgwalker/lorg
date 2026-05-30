@@ -3,14 +3,14 @@ Duplex diagram renderer for the CRISPR Base Editor Window Visualiser.
 
 Produces a colour-coded guide RNA / target DNA duplex diagram with an
 overlaid activity-window bracket and a per-position efficiency bar chart.
-Outputs both PNG and SVG.
+Outputs PNG, SVG, and an HTML/CSS interactive version.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import matplotlib
 matplotlib.use("Agg")
@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import FancyBboxPatch
 
-from src.analyser import PositionInfo
+from src.analyser import PositionInfo, PamInfo
 from src.config import BaseEditorProfile
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,8 @@ def generate_duplex_diagram(
     editor: BaseEditorProfile,
     pam_seq: str,
     output_prefix: str,
-) -> Tuple[Path, Path]:
+    pam_info: Optional[PamInfo] = None,
+) -> Tuple[Path, Path, Path]:
     """
     Render the guide–target duplex diagram and efficiency bar chart.
 
@@ -75,14 +76,18 @@ def generate_duplex_diagram(
         - PAM boxes on both rows
         - Efficiency bar chart
 
+    Also writes an HTML/CSS interactive version of the diagram.
+
     Args:
         positions:      List of 20 PositionInfo objects from analyse_sequence().
         editor:         BaseEditorProfile used for analysis.
         pam_seq:        PAM sequence extracted from target_dna (e.g. 'NGG').
-        output_prefix:  File path prefix; '_duplex.png' and '_duplex.svg' appended.
+        output_prefix:  File path prefix; '_duplex.png', '_duplex.svg', and
+                        '_duplex.html' appended.
+        pam_info:       Optional PamInfo for PAM match annotation in HTML.
 
     Returns:
-        Tuple of (png_path, svg_path).
+        Tuple of (png_path, svg_path, html_path).
     """
     n = 20
     gap = 1.10       # horizontal spacing between base boxes
@@ -269,12 +274,358 @@ def generate_duplex_diagram(
         fontsize=11, fontweight="bold", y=0.99,
     )
 
-    png_path = Path(f"{output_prefix}_duplex.png")
-    svg_path = Path(f"{output_prefix}_duplex.svg")
+    png_path  = Path(f"{output_prefix}_duplex.png")
+    svg_path  = Path(f"{output_prefix}_duplex.svg")
+    html_path = Path(f"{output_prefix}_duplex.html")
 
     fig.savefig(png_path, dpi=150, bbox_inches="tight")
     fig.savefig(svg_path, bbox_inches="tight")
     plt.close(fig)
 
-    logger.info("Duplex diagram saved: %s, %s", png_path, svg_path)
-    return png_path, svg_path
+    # ── HTML/CSS diagram ─────────────────────────────────────────────────
+    _write_html_diagram(positions, editor, pam_seq, pam_info, html_path)
+
+    logger.info("Duplex diagram saved: %s, %s, %s", png_path, svg_path, html_path)
+    return png_path, svg_path, html_path
+
+
+# ---------------------------------------------------------------------------
+# HTML/CSS diagram generator
+# ---------------------------------------------------------------------------
+
+def _base_role_css_class(p: PositionInfo) -> str:
+    """Return a CSS class name for the given position's editing role."""
+    if p.is_primary_target:
+        return "primary"
+    if p.is_bystander:
+        return "bystander"
+    if p.in_window:
+        return "in-window"
+    return "out-window"
+
+
+def _write_html_diagram(
+    positions: List[PositionInfo],
+    editor: BaseEditorProfile,
+    pam_seq: str,
+    pam_info: Optional[PamInfo],
+    html_path: Path,
+) -> None:
+    """
+    Write a self-contained HTML/CSS diagram showing the guide–target duplex.
+
+    The diagram uses a horizontal flex layout with one column per protospacer
+    position.  Each column shows:
+      - Guide RNA base (coloured box with tooltip)
+      - Pairing connector
+      - Target DNA base (light box)
+      - Position number
+    Followed by PAM columns.
+    Below the duplex a bar chart of predicted editing efficiency is rendered
+    via inline SVG.
+
+    Annotations:
+      - Filled circle = editable base (primary or bystander)
+      - Open circle = editable base that is a bystander
+      - Shaded box (purple) = PAM
+    """
+    pam_display = (pam_seq[:3] if pam_seq else "NGG").upper()
+    pam_match_str = ""
+    if pam_info is not None:
+        status = "matches" if pam_info.pam_ok else "MISMATCH"
+        pam_match_str = (
+            f'<p class="pam-status pam-{"ok" if pam_info.pam_ok else "mismatch"}">'
+            f'PAM: <strong>{pam_info.pam_seq}</strong> '
+            f'(required: <strong>{pam_info.pam_pattern}</strong>) — {status}</p>'
+        )
+
+    # Build guide / target rows
+    guide_cells = []
+    target_cells = []
+    pos_labels = []
+
+    for p in positions:
+        cls = _base_role_css_class(p)
+        tooltip_lines = [
+            f"Position {p.position}",
+            f"Guide: {p.guide_base} / Target: {p.protospacer_base}",
+            f"Template: {p.template_base}",
+        ]
+        if p.in_window:
+            tooltip_lines.append(f"In activity window")
+        if p.is_primary_target:
+            tooltip_lines.append(f"PRIMARY target — predicted {p.absolute_efficiency*100:.1f}%")
+        elif p.is_bystander:
+            tooltip_lines.append(f"BYSTANDER — predicted {p.absolute_efficiency*100:.1f}%")
+        elif p.in_window:
+            tooltip_lines.append(f"In window but not editable base")
+        tooltip = "&#10;".join(tooltip_lines)
+
+        # Circle annotation: filled = primary, open = bystander
+        circle_html = ""
+        if p.is_primary_target:
+            circle_html = '<span class="circle filled" title="Primary edit target"></span>'
+        elif p.is_bystander:
+            circle_html = '<span class="circle open" title="Bystander risk"></span>'
+
+        guide_cells.append(
+            f'<div class="cell guide-cell {cls}" title="{tooltip}">'
+            f'{p.guide_base}{circle_html}</div>'
+        )
+        target_cells.append(
+            f'<div class="cell target-cell" title="{tooltip}">{p.protospacer_base}</div>'
+        )
+        pos_labels.append(
+            f'<div class="cell pos-label">{p.position}</div>'
+        )
+
+    # PAM cells
+    for base in pam_display:
+        guide_cells.append(
+            '<div class="cell guide-cell pam-guide" title="PAM (guide does not cover)">—</div>'
+        )
+        target_cells.append(
+            f'<div class="cell target-cell pam-target" title="PAM base">{base}</div>'
+        )
+        pos_labels.append('<div class="cell pos-label pam-pos">PAM</div>')
+
+    guide_row_html  = "\n".join(guide_cells)
+    target_row_html = "\n".join(target_cells)
+    pos_row_html    = "\n".join(pos_labels)
+
+    # Inline SVG bar chart
+    bar_w = 28
+    bar_gap = 4
+    chart_h = 80
+    max_pct = editor.max_absolute_efficiency * 100 * 1.20
+    chart_total_w = (bar_w + bar_gap) * (len(positions) + len(pam_display))
+
+    bars_svg = []
+    for i, p in enumerate(positions):
+        pct = p.absolute_efficiency * 100
+        bar_h = int((pct / max_pct) * chart_h) if max_pct > 0 else 0
+        x = i * (bar_w + bar_gap)
+        y = chart_h - bar_h
+        color_map = {
+            "primary":    "#27ae60",
+            "bystander":  "#e67e22",
+            "in-window":  "#2980b9",
+            "out-window": "#95a5a6",
+        }
+        fill = color_map.get(_base_role_css_class(p), "#95a5a6")
+        bars_svg.append(
+            f'<rect x="{x}" y="{y}" width="{bar_w}" height="{bar_h}" '
+            f'fill="{fill}" opacity="0.85">'
+            f'<title>Pos {p.position}: {pct:.1f}%</title></rect>'
+        )
+        if pct > 0:
+            bars_svg.append(
+                f'<text x="{x + bar_w//2}" y="{max(y - 2, 8)}" '
+                f'text-anchor="middle" font-size="8" fill="#333">{pct:.0f}%</text>'
+            )
+
+    threshold_y = int(chart_h - (10.0 / max_pct) * chart_h) if max_pct > 0 else chart_h // 2
+    bars_svg.append(
+        f'<line x1="0" y1="{threshold_y}" x2="{chart_total_w}" y2="{threshold_y}" '
+        f'stroke="#95a5a6" stroke-width="1" stroke-dasharray="4,3" opacity="0.7">'
+        f'<title>10% threshold</title></line>'
+    )
+
+    svg_chart = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{chart_total_w}" height="{chart_h + 20}" '
+        f'style="display:block;margin-top:6px;">'
+        + "\n".join(bars_svg) +
+        f'<text x="{chart_total_w//2}" y="{chart_h + 16}" text-anchor="middle" '
+        f'font-size="10" fill="#555">Protospacer position (1=PAM-distal → 20=PAM-proximal)</text>'
+        f'</svg>'
+    )
+
+    # Legend
+    legend_items = [
+        ("primary", "#27ae60", "Primary edit target"),
+        ("bystander", "#e67e22", "Bystander edit risk"),
+        ("in-window", "#2980b9", "In window (wrong base)"),
+        ("out-window", "#95a5a6", "Outside window"),
+        ("pam", "#8e44ad", "PAM"),
+    ]
+    legend_html = "".join(
+        f'<span class="legend-item"><span class="legend-swatch" '
+        f'style="background:{color};"></span>{label}</span>'
+        for _, color, label in legend_items
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRISPR Base Editor Window Visualiser — {editor.name}</title>
+<style>
+  body {{
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f9f9fb;
+    color: #2c3e50;
+    margin: 0;
+    padding: 20px;
+  }}
+  h1 {{ font-size: 1.2em; margin-bottom: 4px; }}
+  .subtitle {{ font-size: 0.85em; color: #555; margin-bottom: 14px; }}
+  .duplex-wrapper {{
+    overflow-x: auto;
+    padding: 10px 0 6px;
+  }}
+  .strand-row {{
+    display: flex;
+    align-items: center;
+    margin-bottom: 2px;
+    min-width: max-content;
+  }}
+  .strand-label {{
+    font-size: 0.75em;
+    font-style: italic;
+    color: #555;
+    min-width: 140px;
+    text-align: right;
+    padding-right: 8px;
+    white-space: nowrap;
+  }}
+  .strand-end {{
+    font-size: 0.8em;
+    font-weight: bold;
+    padding-left: 6px;
+    color: #2c3e50;
+  }}
+  .cell {{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: 1px;
+    font-size: 0.85em;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: default;
+    position: relative;
+    user-select: none;
+    flex-shrink: 0;
+  }}
+  .guide-cell.primary    {{ background: #27ae60; color: white; }}
+  .guide-cell.bystander  {{ background: #e67e22; color: white; }}
+  .guide-cell.in-window  {{ background: #2980b9; color: white; }}
+  .guide-cell.out-window {{ background: #95a5a6; color: white; }}
+  .guide-cell.pam-guide  {{ background: #c0a0d0; color: #7d3fa0; font-style: italic; }}
+  .target-cell           {{ background: #ecf0f1; border: 1px solid #bdc3c7; color: #2c3e50; }}
+  .target-cell.pam-target {{ background: #8e44ad; color: white; border: none; }}
+  .pos-label             {{ font-size: 0.65em; color: #999; font-weight: normal; height: 16px; }}
+  .pos-label.pam-pos     {{ color: #9b59b6; font-weight: bold; font-size: 0.60em; }}
+  .connector-row {{
+    display: flex;
+    align-items: center;
+    min-width: max-content;
+  }}
+  .connector {{
+    display: inline-block;
+    width: 30px;
+    text-align: center;
+    color: #7f8c8d;
+    font-size: 0.7em;
+    line-height: 10px;
+    flex-shrink: 0;
+  }}
+  .connector-pam {{
+    display: inline-block;
+    width: 30px;
+    text-align: center;
+    color: #7f8c8d;
+    font-size: 0.7em;
+    opacity: 0.5;
+    flex-shrink: 0;
+  }}
+  .circle {{
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+  }}
+  .circle.filled {{ background: white; }}
+  .circle.open   {{ background: transparent; border: 1.5px solid white; }}
+  .legend {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 10px 0;
+    font-size: 0.78em;
+  }}
+  .legend-item {{
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }}
+  .legend-swatch {{
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+  }}
+  .chart-section {{ margin-top: 8px; overflow-x: auto; }}
+  .chart-label {{ font-size: 0.75em; color: #555; margin-bottom: 2px; }}
+  .pam-status {{ font-size: 0.82em; margin: 6px 0; padding: 4px 8px; border-radius: 4px; }}
+  .pam-ok {{ background: #d4efdf; color: #1a7a3a; }}
+  .pam-mismatch {{ background: #fde8e4; color: #a93226; }}
+  .window-info {{
+    font-size: 0.80em;
+    color: #c0392b;
+    font-weight: bold;
+    margin: 4px 0 8px 148px;
+  }}
+</style>
+</head>
+<body>
+<h1>CRISPR Base Editor Window Visualiser &mdash; {editor.name}</h1>
+<p class="subtitle">{editor.description}</p>
+{pam_match_str}
+<div class="legend">{legend_html}</div>
+<div class="window-info">
+  Activity window: positions {editor.window_start}&ndash;{editor.window_end}
+  &nbsp;|&nbsp; Edit type: {editor.target_base}&rarr;{editor.product_base}
+</div>
+<div class="duplex-wrapper">
+  <div class="strand-row">
+    <span class="strand-label">Guide RNA</span>
+    <span style="font-size:0.8em;font-weight:bold;padding-right:4px;">5'</span>
+    {guide_row_html}
+    <span class="strand-end">3'</span>
+  </div>
+  <div class="connector-row">
+    <span class="strand-label"></span>
+    <span style="width:28px;display:inline-block;"></span>
+    {"".join(f'<span class="connector">|</span>' for _ in positions)}
+    {"".join(f'<span class="connector-pam">&#183;</span>' for _ in pam_display)}
+  </div>
+  <div class="strand-row">
+    <span class="strand-label">Target DNA (non-template)</span>
+    <span style="font-size:0.8em;font-weight:bold;padding-right:4px;">3'</span>
+    {target_row_html}
+    <span class="strand-end">5'</span>
+  </div>
+  <div class="strand-row">
+    <span class="strand-label"></span>
+    <span style="width:28px;display:inline-block;"></span>
+    {pos_row_html}
+  </div>
+</div>
+<div class="chart-section">
+  <p class="chart-label">Predicted editing efficiency per position (dashed line = 10% threshold):</p>
+  {svg_chart}
+</div>
+</body>
+</html>
+"""
+
+    html_path.write_text(html, encoding="utf-8")
+    logger.info("HTML diagram saved: %s", html_path)

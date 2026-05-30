@@ -146,6 +146,28 @@ EDITOR_PROFILES: Dict[str, BaseEditorProfile] = {
         max_absolute_efficiency=0.68,
         description="Ancestral APOBEC-based BE4max, tight PAM-distal bias (Koblan et al. 2018)",
     ),
+    "CBE-NG": BaseEditorProfile(
+        name="CBE-NG",
+        editor_class="CBE",
+        window_start=4,
+        window_end=8,
+        target_base="C",
+        product_base="T",
+        efficiency_profile=_gaussian_profile(5.5, 1.15, 4, 8),
+        max_absolute_efficiency=0.65,
+        description="SpCas9-NG cytosine base editor, relaxed NG PAM (Nishimasu et al. 2018)",
+    ),
+    "ABE-NG": BaseEditorProfile(
+        name="ABE-NG",
+        editor_class="ABE",
+        window_start=4,
+        window_end=8,
+        target_base="A",
+        product_base="G",
+        efficiency_profile=_gaussian_profile(5.5, 1.20, 4, 8),
+        max_absolute_efficiency=0.70,
+        description="SpCas9-NG adenine base editor, relaxed NG PAM (Nishimasu et al. 2018)",
+    ),
 }
 
 
@@ -190,6 +212,68 @@ def build_custom_profile(
         max_absolute_efficiency=max_absolute_efficiency,
         description=f"Custom {cls} editor, window {window_start}–{window_end}",
     )
+
+
+# ---------------------------------------------------------------------------
+# PAM requirements per editor
+# ---------------------------------------------------------------------------
+
+# Maps editor names to their PAM pattern.
+# 'NGG' = standard SpCas9; 'NG' = SpCas9-NG relaxed PAM.
+EDITOR_PAM_REQUIREMENT: Dict[str, str] = {
+    "ABE7.10":   "NGG",
+    "ABE8e":     "NGG",
+    "BE3":       "NGG",
+    "BE4max":    "NGG",
+    "evoAPOBEC": "NGG",
+    "AncBE4max": "NGG",
+    "CBE-NG":    "NG",
+    "ABE-NG":    "NG",
+}
+
+
+def get_pam_requirement(editor_name: str) -> str:
+    """Return the PAM pattern ('NGG' or 'NG') for a given editor name."""
+    return EDITOR_PAM_REQUIREMENT.get(editor_name, "NGG")
+
+
+def pam_matches(pam_seq: str, pattern: str) -> bool:
+    """
+    Check whether a PAM sequence satisfies an IUPAC pattern.
+
+    'N' matches any nucleotide; other letters must match exactly
+    (case-insensitive).  Only the first len(pattern) bases of pam_seq
+    are examined.
+
+    Args:
+        pam_seq:  Actual PAM sequence extracted from target_dna.
+        pattern:  PAM pattern string (e.g. 'NGG' or 'NG').
+
+    Returns:
+        True if pam_seq matches pattern; False otherwise.
+    """
+    seq = pam_seq.upper()
+    pat = pattern.upper()
+    if len(seq) < len(pat):
+        return False
+    for s, p in zip(seq, pat):
+        if p == "N":
+            continue
+        if p == "R" and s in ("A", "G"):
+            continue
+        if p == "Y" and s in ("C", "T"):
+            continue
+        if p == "W" and s in ("A", "T"):
+            continue
+        if p == "S" and s in ("C", "G"):
+            continue
+        if p == "K" and s in ("G", "T"):
+            continue
+        if p == "M" and s in ("A", "C"):
+            continue
+        if s != p:
+            return False
+    return True
 
 
 # ---------------------------------------------------------------------------
