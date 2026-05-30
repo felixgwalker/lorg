@@ -2,6 +2,153 @@
 
 import re
 from collections import Counter
+from dataclasses import dataclass, field
+
+
+# Synthesis length limits (bp).
+_SSODN_MAX_LEN = 200   # single-stranded oligonucleotide
+_PLASMID_MAX_LEN = 5000  # plasmid / dsDNA donor
+
+
+@dataclass
+class QCResult:
+    """Result of a full HDR template quality-control check.
+
+    Attributes
+    ----------
+    passed : bool
+        ``True`` when no hard-fail conditions were detected.  Warnings
+        (``warnings`` list non-empty) do not cause a fail on their own.
+    warnings : list[str]
+        Human-readable warning/error messages, one per issue found.
+    checks : list[dict]
+        Detailed per-check results from :func:`run_all_checks`.
+    """
+    passed: bool
+    warnings: list[str] = field(default_factory=list)
+    checks: list[dict] = field(default_factory=list)
+
+
+def check_template(template: dict, edit_spec: dict, homology_arm_len: int) -> QCResult:
+    """Run comprehensive QC on an HDR donor template.
+
+    Parameters
+    ----------
+    template : dict
+        Template dict as returned by :func:`~src.edit_applicator.build_template`,
+        containing keys ``left_arm``, ``edit_seq``, ``right_arm``,
+        ``full_template``, ``left_arm_len``, ``right_arm_len``.
+    edit_spec : dict
+        Edit specification dict (same format as accepted by
+        :func:`~src.edit_applicator.apply_edit`), with keys
+        ``type``, ``ref_bases``, and ``alt_bases``.
+    homology_arm_len : int
+        Requested (nominal) arm length used when building the template.
+
+    Returns
+    -------
+    QCResult
+        Dataclass with ``passed``, ``warnings``, and ``checks``.
+    """
+    warnings: list[str] = []
+    hard_fail = False
+
+    left_arm: str = template.get("left_arm", "")
+    right_arm: str = template.get("right_arm", "")
+    edit_seq: str = template.get("edit_seq", "")
+    full_template: str = template.get("full_template", "")
+
+    # ------------------------------------------------------------------
+    # 1. Homology arm length
+    # ------------------------------------------------------------------
+    min_arm = 30
+    if len(left_arm) < min_arm:
+        msg = (
+            f"Left homology arm is only {len(left_arm)} bp "
+            f"(minimum required: {min_arm} bp)"
+        )
+        warnings.append(msg)
+        hard_fail = True
+    if len(right_arm) < min_arm:
+        msg = (
+            f"Right homology arm is only {len(right_arm)} bp "
+            f"(minimum required: {min_arm} bp)"
+        )
+        warnings.append(msg)
+        hard_fail = True
+
+    # ------------------------------------------------------------------
+    # 2. Edit incorporated correctly
+    # ------------------------------------------------------------------
+    alt_bases = str(edit_spec.get("alt_bases", "")).upper()
+    if alt_bases and edit_seq.upper() != alt_bases:
+        warnings.append(
+            f"Edit sequence in template ('{edit_seq}') does not match "
+            f"expected alt_bases ('{alt_bases}')"
+        )
+        hard_fail = True
+
+    # Verify that the full_template actually contains the edit sequence.
+    if alt_bases and alt_bases not in full_template.upper():
+        warnings.append(
+            f"Alt bases '{alt_bases}' not found anywhere in full template sequence"
+        )
+        hard_fail = True
+
+    # ------------------------------------------------------------------
+    # 3. Internal PAM sites in payload (the edit region only)
+    # ------------------------------------------------------------------
+    # A PAM site inside the payload means Cas9 could cut the donor.
+    payload = edit_seq.upper()
+    pam_in_payload: list[int] = []
+    for i in range(len(payload) - 2):
+        if payload[i + 1] == "G" and payload[i + 2] == "G":
+            pam_in_payload.append(i)
+    if pam_in_payload:
+        warnings.append(
+            f"NGG PAM site(s) detected in payload/edit sequence at positions: "
+            f"{pam_in_payload} — Cas9 may re-cut after HDR"
+        )
+
+    # ------------------------------------------------------------------
+    # 4. Template length within synthesis limits
+    # ------------------------------------------------------------------
+    tlen = len(full_template)
+    if tlen <= _SSODN_MAX_LEN:
+        synth_class = "ssODN"
+    elif tlen <= _PLASMID_MAX_LEN:
+        synth_class = "plasmid/dsDNA"
+    else:
+        synth_class = None
+        warnings.append(
+            f"Template length {tlen} bp exceeds maximum synthesis limit "
+            f"({_PLASMID_MAX_LEN} bp for plasmid donors)"
+        )
+        hard_fail = True
+
+    if synth_class:
+        # Informational — not a warning, but add to checks via a note.
+        pass
+
+    if tlen > _SSODN_MAX_LEN and tlen <= _PLASMID_MAX_LEN:
+        warnings.append(
+            f"Template length {tlen} bp exceeds ssODN limit ({_SSODN_MAX_LEN} bp); "
+            "suitable for plasmid/dsDNA synthesis only"
+        )
+
+    # ------------------------------------------------------------------
+    # 5. Standard sequence-quality checks on both arms
+    # ------------------------------------------------------------------
+    checks = run_all_checks(left_arm, right_arm)
+    for chk in checks:
+        if chk["flag"]:
+            warnings.append(f"QC check '{chk['check']}': {chk['note']}")
+
+    return QCResult(
+        passed=not hard_fail,
+        warnings=warnings,
+        checks=checks,
+    )
 
 
 def gc_content(seq: str) -> float:

@@ -1,6 +1,136 @@
 """Introduce silent PAM-breaking mutations in right arm."""
 
 import re
+from typing import TypedDict
+
+
+class SuggestedMutation(TypedDict):
+    """A proposed single-base change that disrupts an NGG PAM site."""
+    pos: int          # 0-based position in the full template sequence
+    ref: str          # reference base
+    alt: str          # proposed replacement base
+    rationale: str    # human-readable explanation
+
+
+_PAM_SCAN_RADIUS = 10  # bp on each side of cut to scan for PAM sites
+
+
+_COMPLEMENT = str.maketrans("ACGT", "TGCA")
+
+
+def _reverse_complement(seq: str) -> str:
+    return seq.translate(_COMPLEMENT)[::-1]
+
+
+def suggest_pam_disruption(
+    template: str,
+    pam_seq: str,
+    cut_pos: int,
+) -> list[SuggestedMutation]:
+    """Scan for NGG PAM sites within ±10 bp of *cut_pos* and propose disrupting mutations.
+
+    Both the forward strand and reverse complement are searched, which covers all
+    possible guide-RNA orientations.  For each PAM found, the function proposes
+    the minimal single-base change that destroys the GG dinucleotide of the NGG
+    motif, preferring a transversion at the second G (pos+2 of match) over the
+    first G (pos+1) so as to minimise unintended amino-acid changes.
+
+    Parameters
+    ----------
+    template : str
+        The full HDR donor template sequence (uppercase).
+    pam_seq : str
+        PAM motif to search for.  Only ``"NGG"`` is currently meaningful; the
+        ``N`` is treated as a wildcard.
+    cut_pos : int
+        0-based index of the cut site within *template*.
+
+    Returns
+    -------
+    list[SuggestedMutation]
+        One dict per discovered PAM site, sorted by proximity to *cut_pos*.
+        Empty list when no PAM sites are found in the scan window.
+    """
+    # Determine window bounds for the scan.
+    window_start = max(0, cut_pos - _PAM_SCAN_RADIUS)
+    window_end = min(len(template), cut_pos + _PAM_SCAN_RADIUS + 3)  # +3 to allow full PAM at boundary
+
+    suggestions: list[SuggestedMutation] = []
+    seen_positions: set[int] = set()
+
+    # ---- Forward strand scan ------------------------------------------------
+    for i in range(window_start, window_end - 2):
+        if template[i + 1] == "G" and template[i + 2] == "G":
+            # NGG found at i..i+2
+            # Prefer mutating the second G (i+2) G->A (transversion, disrupts GG)
+            _add_suggestion(suggestions, seen_positions, template, i, strand="+")
+
+    # ---- Reverse complement scan --------------------------------------------
+    # On the reverse strand an NGG PAM appears as CCN on the forward strand.
+    for i in range(window_start, window_end - 2):
+        if template[i] == "C" and template[i + 1] == "C":
+            # CCN on forward = NGG on reverse at this region.
+            # To disrupt the PAM on the reverse strand we mutate the first C
+            # on the forward strand (which is the second G on the reverse).
+            _add_suggestion_rev(suggestions, seen_positions, template, i, strand="-")
+
+    # Sort by proximity to cut site.
+    suggestions.sort(key=lambda s: abs(s["pos"] - cut_pos))
+    return suggestions
+
+
+def _add_suggestion(
+    suggestions: list,
+    seen: set,
+    template: str,
+    pam_start: int,
+    strand: str,
+) -> None:
+    """Propose a mutation at the second G of an NGG PAM (forward strand)."""
+    # Mutate position pam_start+2 (the second G) to A.
+    target = pam_start + 2
+    if target in seen:
+        return
+    seen.add(target)
+    ref_base = template[target]
+    alt_base = "A" if ref_base == "G" else "G"
+    suggestions.append(SuggestedMutation(
+        pos=target,
+        ref=ref_base,
+        alt=alt_base,
+        rationale=(
+            f"NGG PAM ({strand} strand) at template positions "
+            f"{pam_start}-{pam_start + 2}; mutate pos {target} "
+            f"{ref_base}->{alt_base} to break GG dinucleotide"
+        ),
+    ))
+
+
+def _add_suggestion_rev(
+    suggestions: list,
+    seen: set,
+    template: str,
+    cc_start: int,
+    strand: str,
+) -> None:
+    """Propose a mutation that disrupts a CCN motif on forward (= NGG rev-complement PAM)."""
+    # Mutate the first C (cc_start) to T to break CC.
+    target = cc_start
+    if target in seen:
+        return
+    seen.add(target)
+    ref_base = template[target]
+    alt_base = "T" if ref_base == "C" else "A"
+    suggestions.append(SuggestedMutation(
+        pos=target,
+        ref=ref_base,
+        alt=alt_base,
+        rationale=(
+            f"CCN motif ({strand} strand / NGG rev-comp PAM) at template positions "
+            f"{cc_start}-{cc_start + 2}; mutate pos {target} "
+            f"{ref_base}->{alt_base} to break CC dinucleotide"
+        ),
+    ))
 
 
 _CODON_TABLE = {

@@ -17,15 +17,30 @@ def run_pipeline(
     plot_fmt: str = "png",
 ) -> dict:
     from .edit_applicator import build_template
-    from .pam_disruptor import disrupt_pam
-    from .qc_checker import run_all_checks, arm_length_variants
-    from .report import write_template_fasta, write_qc_report, write_arm_variants
+    from .pam_disruptor import disrupt_pam, suggest_pam_disruption
+    from .qc_checker import run_all_checks, arm_length_variants, check_template
+    from .report import (
+        write_template_fasta,
+        write_qc_report,
+        write_arm_variants,
+        write_annotated_sequence,
+    )
     from .plot import plot_template_diagram
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
     template = build_template(ref_seq, cut_pos, arm_len, arm_len, edit_type, ref_allele, alt_allele)
 
+    # Build an edit_spec dict for QC / annotation purposes.
+    # Normalise type: snv -> SNP, ins -> INSERTION, del -> DELETION
+    _type_map = {"snv": "SNP", "ins": "INSERTION", "del": "DELETION"}
+    edit_spec = {
+        "type": _type_map.get(edit_type.lower(), edit_type.upper()),
+        "ref_bases": ref_allele,
+        "alt_bases": alt_allele,
+    }
+
+    # PAM disruption (classic disrupt_pam on the right arm).
     pam_note = "PAM disruption not requested"
     if silent_pam:
         new_right, disrupted, pam_note = disrupt_pam(template["right_arm"])
@@ -33,16 +48,29 @@ def run_pipeline(
             template["right_arm"] = new_right
             template["full_template"] = template["left_arm"] + template["edit_seq"] + new_right
 
+    # Suggest PAM disruption mutations for the annotated report / diagram.
+    pam_mutations = suggest_pam_disruption(
+        template["full_template"],
+        pam_seq="NGG",
+        cut_pos=template["left_arm_len"],
+    )
+
     qc_checks = run_all_checks(template["left_arm"], template["right_arm"])
+    qc_result = check_template(template, edit_spec, arm_len)
     variants = arm_length_variants(ref_seq, cut_pos)
 
     fasta_path = write_template_fasta(template, output_dir)
+    annotated_path = write_annotated_sequence(template, output_dir, pam_mutations=pam_mutations)
     qc_path = write_qc_report(qc_checks, output_dir)
     variants_path = write_arm_variants(variants, output_dir)
 
     plot_path = None
     if not no_plot:
-        plot_path = plot_template_diagram(template, qc_checks, output_dir, fmt=plot_fmt)
+        plot_path = plot_template_diagram(
+            template, qc_checks, output_dir,
+            fmt=plot_fmt,
+            pam_mutations=pam_mutations,
+        )
 
     n_flags = sum(1 for c in qc_checks if c["flag"])
     return {
@@ -52,7 +80,11 @@ def run_pipeline(
         "edit_seq": template["edit_seq"],
         "pam_note": pam_note,
         "qc_flags": n_flags,
+        "qc_passed": qc_result.passed,
+        "qc_warnings": qc_result.warnings,
+        "pam_mutations_found": len(pam_mutations),
         "fasta": str(fasta_path),
+        "annotated_sequence": str(annotated_path),
         "qc_report": str(qc_path),
         "arm_variants": str(variants_path),
         "plot": str(plot_path) if plot_path else None,
@@ -61,7 +93,7 @@ def run_pipeline(
 
 def main() -> int:
     import argparse
-    from .reference_reader import load_fasta, make_demo_reference
+    from .reference_reader import load_fasta, make_demo_locus
 
     parser = argparse.ArgumentParser(
         prog="hdr-template-designer",
@@ -89,7 +121,7 @@ def main() -> int:
     parser.add_argument("--no-plot", action="store_true", help="Skip diagram plot")
     parser.add_argument("--plot-format", choices=["png", "svg"], default="png")
     parser.add_argument("--demo", action="store_true",
-                        help="Run demo: synthetic 500bp reference, C->T SNV at pos 250")
+                        help="Run demo: synthetic 1000bp reference, C->T SNP at cut pos 500, PAM disruption ON")
     args = parser.parse_args()
 
     if not args.demo:
@@ -99,10 +131,13 @@ def main() -> int:
             parser.error(f"Required args missing: {', '.join('--' + r.replace('_', '-') for r in missing)}")
 
     if args.demo:
-        chrom_name, ref_seq = make_demo_reference()
-        cut_pos, edit_type, ref_allele, alt_allele = 250, "snv", "C", "T"
+        ref_seq, cut_pos = make_demo_locus()
+        edit_type, ref_allele, alt_allele = "snv", "C", "T"
         silent_pam = True
-        print(f"Demo mode: 500bp synthetic reference, C->T SNV at pos {cut_pos}, PAM disruption ON")
+        print(
+            f"Demo mode: 1000 bp synthetic locus | C->T SNP at cut pos {cut_pos} "
+            f"| PAM disruption ON"
+        )
     else:
         genome = load_fasta(args.reference)
         if args.chrom not in genome:
@@ -130,10 +165,15 @@ def main() -> int:
     print(f"Template: {result['template_len']} bp  "
           f"(left={result['left_arm_len']} | edit={result['edit_seq']} | right={result['right_arm_len']})")
     print(f"PAM: {result['pam_note']}")
-    print(f"QC flags: {result['qc_flags']}")
-    print(f"  FASTA:          {result['fasta']}")
-    print(f"  QC report:      {result['qc_report']}")
-    print(f"  Arm variants:   {result['arm_variants']}")
+    print(f"QC flags: {result['qc_flags']}  |  QC passed: {result['qc_passed']}")
+    if result["qc_warnings"]:
+        for w in result["qc_warnings"]:
+            print(f"  [WARN] {w}")
+    print(f"PAM mutation sites found: {result['pam_mutations_found']}")
+    print(f"  FASTA:              {result['fasta']}")
+    print(f"  Annotated sequence: {result['annotated_sequence']}")
+    print(f"  QC report:          {result['qc_report']}")
+    print(f"  Arm variants:       {result['arm_variants']}")
     if result["plot"]:
-        print(f"  Template diagram: {result['plot']}")
+        print(f"  Template diagram:   {result['plot']}")
     return 0

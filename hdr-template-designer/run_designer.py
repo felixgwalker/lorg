@@ -61,13 +61,16 @@ def main() -> int:
     args = parser.parse_args()
     validate_args(args, parser)
 
-    from src.reference_reader import load_fasta, make_demo_reference
+    from src.reference_reader import load_fasta, make_demo_locus
     from src.pipeline import run_pipeline
 
     if args.demo:
-        chrom_name, ref_seq = make_demo_reference()
-        cut_pos, edit_type, ref_allele, alt_allele, silent_pam = 250, "snv", "C", "T", True
-        print(f"Demo mode: 500bp synthetic reference | C->T SNV at pos {cut_pos} | PAM disruption ON")
+        ref_seq, cut_pos = make_demo_locus()
+        edit_type, ref_allele, alt_allele, silent_pam = "snv", "C", "T", True
+        print(
+            f"Demo mode: 1000 bp synthetic locus | C->T SNP at cut pos {cut_pos} "
+            f"| PAM disruption ON"
+        )
     else:
         genome = load_fasta(args.reference)
         if args.chrom not in genome:
@@ -96,12 +99,17 @@ def main() -> int:
     print(f"Template: {result['template_len']} bp  "
           f"(left={result['left_arm_len']} | edit={result['edit_seq']} | right={result['right_arm_len']})")
     print(f"PAM:      {result['pam_note']}")
-    print(f"QC flags: {result['qc_flags']}")
-    print(f"  FASTA:           {result['fasta']}")
-    print(f"  QC report:       {result['qc_report']}")
-    print(f"  Arm variants:    {result['arm_variants']}")
+    print(f"QC flags: {result['qc_flags']}  |  QC passed: {result['qc_passed']}")
+    if result.get("qc_warnings"):
+        for w in result["qc_warnings"]:
+            print(f"  [WARN] {w}")
+    print(f"PAM mutation sites found: {result['pam_mutations_found']}")
+    print(f"  FASTA:              {result['fasta']}")
+    print(f"  Annotated sequence: {result['annotated_sequence']}")
+    print(f"  QC report:          {result['qc_report']}")
+    print(f"  Arm variants:       {result['arm_variants']}")
     if result["plot"]:
-        print(f"  Template diagram: {result['plot']}")
+        print(f"  Template diagram:   {result['plot']}")
     return 0
 
 
