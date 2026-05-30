@@ -106,12 +106,18 @@ def generate_demo_variants(n: int = 10, seed: int = 42) -> list[SynonymousVarian
 
 
 def _build_synonymous_pairs() -> list[tuple[str, str]]:
-    from Bio.Data import CodonTable
-    table = CodonTable.unambiguous_dna_by_id[1].forward_table
+    """Build all synonymous codon pairs from the standard genetic code.
+
+    Uses the locally-defined STANDARD_GENETIC_CODE to avoid any external
+    dependency (e.g. BioPython).  Stop codons are excluded.
+    """
+    from src.codon_tables import STANDARD_GENETIC_CODE
     aa_to_codons: dict[str, list[str]] = {}
-    for codon, aa in table.items():
+    for codon, aa in STANDARD_GENETIC_CODE.items():
+        if aa == "*":
+            continue  # skip stop codons
         aa_to_codons.setdefault(aa, []).append(codon)
-    pairs = []
+    pairs: list[tuple[str, str]] = []
     for codons in aa_to_codons.values():
         if len(codons) < 2:
             continue

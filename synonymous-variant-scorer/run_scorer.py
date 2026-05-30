@@ -104,11 +104,11 @@ def _print_summary(result: dict) -> None:
     print(f"\nSynonymous Variant Scorer v{result['pipeline_version']}")
     print(f"Variants scored : {len(scored)}")
     if scored:
-        tiers = {"HIGH": 0, "MODERATE": 0, "LOW": 0}
+        tiers: dict[str, int] = {}
         for s in scored:
             tiers[s.impact_tier] = tiers.get(s.impact_tier, 0) + 1
         for tier, count in sorted(tiers.items()):
-            print(f"  {tier:10s}: {count}")
+            print(f"  {tier:20s}: {count}")
         top = max(scored, key=lambda s: s.composite_score)
         print(f"Top variant     : {top.variant_id} ({top.gene}) — composite={top.composite_score:.3f} [{top.impact_tier}]")
     out = result.get("output_files", {})
