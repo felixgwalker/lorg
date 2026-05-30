@@ -7,7 +7,7 @@ from .variant_classifier import classify_all_variants, compute_burden
 from .impact_annotator import annotate_impact
 from .vcf_writer import write_vcf
 from .report import write_burden_summary, write_prioritized_edits, write_burden_json
-from .plot import plot_edit_burden
+from .plot import plot_edit_burden, plot_impact_pie
 
 
 def run_pipeline(args):
@@ -48,6 +48,8 @@ def run_pipeline(args):
         fmt = getattr(args, "plot_format", "png")
         p = plot_edit_burden(variants, burden, chrom_lengths, args.output_dir, fmt=fmt)
         plot_paths.append(p)
+        pie_p = plot_impact_pie(variants, args.output_dir, fmt=fmt)
+        plot_paths.append(pie_p)
 
     return {
         "proxy_seqs": proxy_seqs,
