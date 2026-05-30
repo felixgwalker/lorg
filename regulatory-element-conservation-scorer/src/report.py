@@ -2,6 +2,37 @@ import os
 import csv
 
 
+def write_per_element_tsv(scored_elements, species_list, output_dir):
+    """Write a per-element conservation report as a TSV file.
+
+    Columns: element_id, chrom, start, end, classification,
+             combined_score, mean_sequence_identity, motif_retention,
+             plus one identity_<species> column for every species.
+
+    Returns the output path.
+    """
+    path = os.path.join(output_dir, "per_element_conservation.tsv")
+    base_fields = [
+        "element_id", "chrom", "start", "end",
+        "classification", "combined_score",
+        "mean_sequence_identity", "motif_retention",
+    ]
+    sp_fields = [f"identity_{sp}" for sp in species_list]
+    fieldnames = base_fields + sp_fields
+
+    with open(path, "w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames, delimiter="\t")
+        writer.writeheader()
+        for elem in scored_elements:
+            row = {}
+            for f in base_fields:
+                row[f] = elem.get(f, "")
+            for sp in species_list:
+                row[f"identity_{sp}"] = elem["per_species_identity"].get(sp, "")
+            writer.writerow(row)
+    return path
+
+
 def write_conservation_scores(scored_elements, species_list, output_dir):
     path = os.path.join(output_dir, "conservation_scores.csv")
     base_fields = ["element_id", "mean_sequence_identity", "motif_retention",

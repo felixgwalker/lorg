@@ -30,6 +30,57 @@ def extract_element_sequence(sequences, element, offset=0):
     return seq[start:end]
 
 
+def extract_sequences(regions, genome_fasta):
+    """Extract sequences for a list of BED regions from a genome FASTA.
+
+    Parameters
+    ----------
+    regions : list of RegionRecord dicts (chrom, start, end, name, …)
+    genome_fasta : str — path to a FASTA file, or None for demo/synthetic mode
+
+    Returns
+    -------
+    list of (name, seq) tuples, one per region.
+    Coordinates are clipped to chromosome end gracefully.
+    When genome_fasta is None (or the file cannot be opened), synthetic
+    sequences are generated from the region length so the rest of the
+    pipeline can run without a real genome.
+    """
+    if genome_fasta is None:
+        return _synthetic_sequences(regions)
+
+    try:
+        genome = load_fasta(genome_fasta)
+    except (OSError, IOError):
+        return _synthetic_sequences(regions)
+
+    result = []
+    for reg in regions:
+        name = reg.get("name") or reg.get("id") or f"{reg['chrom']}:{reg['start']}-{reg['end']}"
+        chrom = reg["chrom"]
+        chrom_seq = genome.get(chrom, "")
+        if not chrom_seq:
+            result.append((name, ""))
+            continue
+        start = max(0, reg["start"])
+        end = min(len(chrom_seq), reg["end"])
+        result.append((name, chrom_seq[start:end]))
+    return result
+
+
+def _synthetic_sequences(regions):
+    """Generate deterministic synthetic sequences when no genome is available."""
+    random.seed(42)
+    bases = list("ACGT")
+    result = []
+    for reg in regions:
+        name = reg.get("name") or reg.get("id") or f"{reg['chrom']}:{reg['start']}-{reg['end']}"
+        length = max(1, reg["end"] - reg["start"])
+        seq = "".join(random.choices(bases, k=length))
+        result.append((name, seq))
+    return result
+
+
 def demo_species_sequences(elements, species_list):
     random.seed(123)
     bases = list("ACGT")
