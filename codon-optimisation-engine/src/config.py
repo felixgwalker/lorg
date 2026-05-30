@@ -1,0 +1,13 @@
+"""Configuration for Codon Optimisation Engine."""
+
+DEFAULT_HOST_ORGANISM = "Homo sapiens"
+DEFAULT_STRATEGY = "CAI_maximised"
+
+TARGET_GC_MIN = 0.40
+TARGET_GC_MAX = 0.65
+
+AVOID_RESTRICTION_SITES = ["EcoRI", "BamHI", "HindIII", "NcoI", "XhoI"]
+AVOID_INTERNAL_STOP_CODONS = True
+AVOID_HOMOPOLYMERS_LENGTH = 6
+
+GENETIC_CODE = 1

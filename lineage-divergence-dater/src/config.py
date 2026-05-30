@@ -1,0 +1,10 @@
+"""Configuration for Lineage Divergence Dater."""
+
+DEFAULT_MUTATION_RATE = 1.25e-8
+DEFAULT_GENERATION_TIME = 30.0
+
+BOOTSTRAP_REPS = 1000
+MCMC_STEPS = 1000000
+BURNIN = 0.1
+
+CALIBRATION_PRIOR = "uniform"

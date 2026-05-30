@@ -1,0 +1,11 @@
+"""Configuration for Cross-Species Liftover Assistant."""
+
+MIN_IDENTITY = 70.0
+MIN_COVERAGE = 50.0
+MAX_MULTI_MAPPING_HITS = 3
+
+CHAIN_MIN_SCORE = 1000
+CHAIN_MIN_SIZE_T = 10
+
+SYNTENY_FALLBACK = True
+SYNTENY_WINDOW_KB = 100

@@ -1,0 +1,14 @@
+"""Configuration for Multiplex Edit Planner."""
+
+CROSS_REACTIVITY_CFD_THRESHOLD = 0.10
+OVERLAPPING_WINDOW_BP = 100
+TRANSLOCATION_RISK_DISTANCE_LIMIT = 50_000_000
+
+MAX_GUIDES_PER_BATCH_DEFAULT = 4
+MAX_GUIDES_PER_BATCH_LIMIT = 8
+
+COMPATIBILITY_LEVELS: list[tuple[float, str]] = [
+    (0.05, "compatible"),
+    (0.10, "caution"),
+]
+COMPATIBILITY_LEVEL_TOP = "incompatible"

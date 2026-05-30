@@ -1,0 +1,10 @@
+"""Configuration for Assembly Quality Assessor."""
+
+REFERENCE_QUALITY_N50 = 25_000_000
+CHROMOSOME_LEVEL_N50 = 1_000_000
+SCAFFOLD_LEVEL_N50 = 10_000
+
+N_STATS = [50, 75, 90]
+MAX_GAP_LENGTH = 100
+
+AMBIGUOUS_BASES = {"N", "n"}

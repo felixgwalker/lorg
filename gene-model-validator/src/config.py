@@ -1,0 +1,12 @@
+"""Configuration for Gene Model Validator."""
+
+CANONICAL_DONORS = {"GT"}
+CANONICAL_ACCEPTORS = {"AG"}
+NON_CANONICAL_DONORS = {"GC", "AT"}
+
+MIN_INTRON_LENGTH = 60
+MIN_EXON_LENGTH = 3
+
+GENETIC_CODE = 1
+START_CODONS = {"ATG"}
+STOP_CODONS = {"TAA", "TAG", "TGA"}

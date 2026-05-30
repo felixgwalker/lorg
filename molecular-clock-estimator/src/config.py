@@ -1,0 +1,11 @@
+"""Configuration for Molecular Clock Estimator."""
+
+DEFAULT_CLOCK_MODEL = "relaxed_lognormal"
+MCMC_STEPS = 10000000
+BURNIN = 0.1
+LOG_EVERY = 1000
+
+SUBSTITUTION_MODELS = ["GTR+G", "HKY+G", "JC"]
+GAMMA_CATEGORIES = 4
+
+BAYES_FACTOR_THRESHOLD = 3.0
