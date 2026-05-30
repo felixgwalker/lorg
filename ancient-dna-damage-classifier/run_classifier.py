@@ -43,9 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "bam",
         metavar="BAM",
+        nargs="?",
+        default=None,
         help=(
             "Path to aligned, coordinate-sorted, indexed BAM file. "
-            "FASTQ input is not supported — pre-align with BWA-MEM first."
+            "FASTQ input is not supported — pre-align with BWA-MEM first. "
+            "Omit when using --demo."
         ),
     )
     parser.add_argument(
@@ -111,6 +114,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip matplotlib figure generation (useful in headless environments).",
     )
     parser.add_argument(
+        "--demo",
+        action="store_true",
+        help=(
+            "Run in demonstration mode using synthetic ancient DNA damage data. "
+            "No real BAM file is required.  The BAM positional argument is still "
+            "accepted but ignored when --demo is given."
+        ),
+    )
+    parser.add_argument(
         "-q", "--quiet",
         action="store_true",
         help="Suppress console summary output. Output files are still written.",
@@ -136,46 +148,56 @@ def validate_args(args: argparse.Namespace) -> None:
 
     Raises SystemExit(1) with a descriptive message on any violation.
     """
-    bam_path = Path(args.bam)
+    # In demo mode, skip all BAM-related checks.
+    if not args.demo:
+        if args.bam is None:
+            print(
+                "ERROR: A BAM file path is required unless --demo is specified.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
-    # FASTQ detection — provide a helpful redirect
-    fastq_suffixes = {".fastq", ".fq", ".fastq.gz", ".fq.gz"}
-    if bam_path.suffix.lower() in fastq_suffixes or ".fastq" in bam_path.name.lower():
-        print(
-            "ERROR: FASTQ input is not supported.\n"
-            "Pre-align reads to a reference genome using BWA-MEM and provide the\n"
-            "sorted, indexed BAM file:\n\n"
-            "    bwa mem reference.fa reads.fastq | samtools sort -o reads.bam\n"
-            "    samtools index reads.bam\n"
-            "    python run_classifier.py reads.bam --output-dir results/",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        bam_path = Path(args.bam)
 
-    if not bam_path.exists():
-        print(f"ERROR: BAM file not found: {bam_path}", file=sys.stderr)
-        sys.exit(1)
+        # FASTQ detection — provide a helpful redirect
+        fastq_suffixes = {".fastq", ".fq", ".fastq.gz", ".fq.gz"}
+        if bam_path.suffix.lower() in fastq_suffixes or ".fastq" in bam_path.name.lower():
+            print(
+                "ERROR: FASTQ input is not supported.\n"
+                "Pre-align reads to a reference genome using BWA-MEM and provide the\n"
+                "sorted, indexed BAM file:\n\n"
+                "    bwa mem reference.fa reads.fastq | samtools sort -o reads.bam\n"
+                "    samtools index reads.bam\n"
+                "    python run_classifier.py reads.bam --output-dir results/",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
-    if bam_path.suffix.lower() != ".bam":
-        print(
-            f"ERROR: Input file does not have a .bam extension: {bam_path}\n"
-            "Provide a sorted, indexed BAM file.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        if not bam_path.exists():
+            print(f"ERROR: BAM file not found: {bam_path}", file=sys.stderr)
+            sys.exit(1)
 
-    # BAM index check (.bai or .bam.bai)
-    bai_1 = bam_path.with_suffix(".bai")
-    bai_2 = Path(str(bam_path) + ".bai")
-    if not bai_1.exists() and not bai_2.exists():
-        print(
-            f"ERROR: BAM index not found for {bam_path}.\n"
-            "Run 'samtools index <bam>' before classifying.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        if bam_path.suffix.lower() != ".bam":
+            print(
+                f"ERROR: Input file does not have a .bam extension: {bam_path}\n"
+                "Provide a sorted, indexed BAM file.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
-    if args.n_terminal > args.min_length // 2:
+        # BAM index check (.bai or .bam.bai)
+        bai_1 = bam_path.with_suffix(".bai")
+        bai_2 = Path(str(bam_path) + ".bai")
+        if not bai_1.exists() and not bai_2.exists():
+            print(
+                f"ERROR: BAM index not found for {bam_path}.\n"
+                "Run 'samtools index <bam>' before classifying.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    # In demo mode min_length is irrelevant (no actual read filtering), so skip this.
+    if not args.demo and args.n_terminal > args.min_length // 2:
         print(
             f"ERROR: --n-terminal ({args.n_terminal}) must be <= "
             f"--min-length // 2 ({args.min_length // 2}). "
@@ -218,7 +240,7 @@ def print_summary(result: dict) -> None:
     frag_stats = result["frag_stats"]
 
     lines = _build_summary_lines(profile, model, summary, frag_stats)
-    print("\n".join(lines))
+    print("\n".join(lines).encode(sys.stdout.encoding or "utf-8", errors="replace").decode(sys.stdout.encoding or "utf-8", errors="replace"))
 
     out_files = result.get("output_files", {})
     if out_files:
@@ -260,21 +282,32 @@ def main(argv: list[str] | None = None) -> int:
     validate_args(args)
 
     # Import here so logging is configured first
-    from src.pipeline import run_pipeline
+    from src.pipeline import run_demo_pipeline, run_pipeline
 
     try:
-        result = run_pipeline(
-            bam_path=Path(args.bam),
-            output_dir=Path(args.output_dir),
-            min_mapq=args.min_mapq,
-            min_length=args.min_length,
-            n_terminal=args.n_terminal,
-            prior_ancient=args.prior_ancient,
-            auth_threshold=args.auth_threshold,
-            cont_threshold=args.cont_threshold,
-            sample_name=args.sample_name,
-            no_plot=args.no_plot,
-        )
+        if args.demo:
+            result = run_demo_pipeline(
+                output_dir=Path(args.output_dir),
+                n_terminal=args.n_terminal,
+                prior_ancient=args.prior_ancient,
+                auth_threshold=args.auth_threshold,
+                cont_threshold=args.cont_threshold,
+                sample_name=args.sample_name or "demo_synthetic",
+                no_plot=args.no_plot,
+            )
+        else:
+            result = run_pipeline(
+                bam_path=Path(args.bam),
+                output_dir=Path(args.output_dir),
+                min_mapq=args.min_mapq,
+                min_length=args.min_length,
+                n_terminal=args.n_terminal,
+                prior_ancient=args.prior_ancient,
+                auth_threshold=args.auth_threshold,
+                cont_threshold=args.cont_threshold,
+                sample_name=args.sample_name,
+                no_plot=args.no_plot,
+            )
     except (FileNotFoundError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

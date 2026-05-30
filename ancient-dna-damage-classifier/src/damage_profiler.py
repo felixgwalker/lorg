@@ -22,9 +22,16 @@ import logging
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
-import pysam
+
+try:
+    import pysam as _pysam  # noqa: F401  — only used when a real BAM is processed
+    _PYSAM_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _PYSAM_AVAILABLE = False
+    _pysam = None  # type: ignore[assignment]
 
 from src.config import MIN_MD_TAG_FRACTION
 
@@ -76,6 +83,113 @@ class DamageProfile:
             return np.where(self.g_count > 0, self.ga_count / self.g_count, 0.0)
 
 
+def generate_demo_profile(
+    n_terminal: int = 25,
+    n_reads: int = 5000,
+    rng_seed: int = 42,
+) -> DamageProfile:
+    """
+    Generate a synthetic DamageProfile without reading a BAM file.
+
+    Simulates a library of ancient DNA reads with realistic deamination patterns:
+    - 5' C→T damage decaying geometrically from ~25% at position 1.
+    - 3' G→A damage decaying geometrically from ~20% at position 1.
+    - Fragment lengths drawn from a log-normal distribution (mean ~80 bp).
+    - A mix of forward (60%) and reverse (40%) reads.
+
+    Args:
+        n_terminal: Number of terminal positions to simulate.
+        n_reads:    Number of synthetic reads.
+        rng_seed:   Random seed for reproducibility.
+
+    Returns:
+        A DamageProfile populated with synthetic counts and ReadFeatures.
+    """
+    rng = np.random.default_rng(rng_seed)
+
+    ct_count = np.zeros(n_terminal, dtype=np.float64)
+    c_count  = np.zeros(n_terminal, dtype=np.float64)
+    ga_count = np.zeros(n_terminal, dtype=np.float64)
+    g_count  = np.zeros(n_terminal, dtype=np.float64)
+
+    # Geometric decay parameters for 5' C→T
+    amp_ct, rate_ct, bg_ct = 0.25, 0.35, 0.001
+    # Geometric decay parameters for 3' G→A
+    amp_ga, rate_ga, bg_ga = 0.20, 0.30, 0.001
+
+    positions = np.arange(n_terminal, dtype=np.float64)
+    true_ct_rate = amp_ct * (1.0 - rate_ct) ** positions + bg_ct
+    true_ga_rate = amp_ga * (1.0 - rate_ga) ** positions + bg_ga
+
+    # Reference base density: ~30% of positions are C (or G)
+    ref_c_density = 0.30
+    ref_g_density = 0.28
+
+    read_features: list[ReadFeatures] = []
+
+    for i in range(n_reads):
+        # Fragment length: log-normal with mean ~80, std ~25 bp
+        flen = int(np.clip(rng.lognormal(mean=4.38, sigma=0.30), 35, 400))
+        read_len = flen  # single-end
+        is_reverse = rng.random() < 0.40
+        is_paired = False
+
+        # Count C/G opportunities and C→T / G→A events
+        ct_hits = 0
+        ct_opps = 0
+        ga_hits = 0
+        ga_opps = 0
+
+        # Each position in the terminal window: independently sample opportunities
+        for pos in range(min(n_terminal, flen // 2)):
+            if not is_reverse:
+                # Forward strand: 5' C→T
+                if rng.random() < ref_c_density:
+                    c_count[pos] += 1
+                    ct_opps += 1
+                    if rng.random() < true_ct_rate[pos]:
+                        ct_count[pos] += 1
+                        ct_hits += 1
+            else:
+                # Reverse strand: 3' G→A
+                if rng.random() < ref_g_density:
+                    g_count[pos] += 1
+                    ga_opps += 1
+                    if rng.random() < true_ga_rate[pos]:
+                        ga_count[pos] += 1
+                        ga_hits += 1
+
+        rf = ReadFeatures(
+            read_id=f"SIM_READ_{i:06d}",
+            read_length=read_len,
+            template_length=flen,
+            ct_terminal_count=ct_hits,
+            ga_terminal_count=ga_hits,
+            ct_terminal_opportunities=ct_opps,
+            ga_terminal_opportunities=ga_opps,
+            is_paired=is_paired,
+            is_reverse=is_reverse,
+        )
+        read_features.append(rf)
+
+    logger.info(
+        "Demo mode: generated synthetic profile with %d reads, n_terminal=%d.",
+        n_reads, n_terminal,
+    )
+
+    return DamageProfile(
+        n_terminal=n_terminal,
+        n_reads_total=n_reads,
+        n_reads_passed=n_reads,
+        n_reads_no_md=0,
+        ct_count=ct_count,
+        c_count=c_count,
+        ga_count=ga_count,
+        g_count=g_count,
+        read_features=read_features,
+    )
+
+
 def profile_damage(
     bam_path: Path,
     min_mapq: int,
@@ -98,6 +212,14 @@ def profile_damage(
         FileNotFoundError: If bam_path does not exist.
         ValueError:        If the BAM has no index or too few MD-tagged reads.
     """
+    if not _PYSAM_AVAILABLE:
+        raise ImportError(
+            "pysam is not installed. Install it with 'pip install pysam', or use "
+            "--demo mode to run without a real BAM file."
+        )
+
+    import pysam  # noqa: PLC0415  — only imported when available
+
     bam_path = Path(bam_path)
     if not bam_path.exists():
         raise FileNotFoundError(f"BAM file not found: {bam_path}")
@@ -197,7 +319,7 @@ def profile_damage(
 
 
 def _process_read(
-    read: pysam.AlignedSegment,
+    read: Any,
     n_terminal: int,
     ct_count: np.ndarray,
     c_count: np.ndarray,
