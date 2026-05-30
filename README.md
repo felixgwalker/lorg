@@ -2,6 +2,8 @@
 
 A collection of computational biology tools for genomic analysis, de-extinction research, and CRISPR engineering.
 
+*muthadh* is Scottish Gaelic for "mutation" — pronounced roughly **MOO-ugh** (the *th* is silent, the final *-adh* a soft back vowel).
+
 ## Tools
 
 | Tool | Description |
