@@ -18,13 +18,16 @@ class ROHSegment:
     end_pos: int
     n_snps: int
     length_bp: int
-    length_class: str
+    length_class: str   # "short" | "medium" | "long"
     mean_homozygosity: float
 
 
-SHORT_THRESHOLD = 100_000
-MEDIUM_THRESHOLD = 1_000_000
-LONG_THRESHOLD = 10_000_000
+# Length class boundaries (base pairs)
+# short  : <  100 kb   — ancient signal (hundreds of generations ago)
+# medium : 100 kb – 1 Mb — moderate inbreeding (tens of generations)
+# long   : >  1 Mb     — recent inbreeding (last few generations)
+SHORT_MAX_BP = 100_000       # upper boundary for "short"
+MEDIUM_MAX_BP = 1_000_000    # upper boundary for "medium"
 
 
 def detect_roh(
@@ -34,7 +37,19 @@ def detect_roh(
     homo_threshold: float = 0.95,
     min_snps: int = 10,
 ) -> list[ROHSegment]:
-    """Detect ROH segments using a sliding window approach."""
+    """Detect ROH segments using a sliding window approach.
+
+    The algorithm marks each SNP position as "in an ROH" if the window
+    centred on it (or starting at it) has a homozygosity fraction >=
+    *homo_threshold*.  Contiguous runs of marked positions are then merged
+    into ROHSegment objects.  Segments with fewer than *min_snps* SNPs are
+    discarded.
+
+    Length classes assigned to each segment:
+      ``"short"``  — < 100 kb  (ancient bottleneck signal)
+      ``"medium"`` — 100 kb – 1 Mb  (moderate / historical inbreeding)
+      ``"long"``   — > 1 Mb  (recent inbreeding, last few generations)
+    """
     positions = np.array(gdata.positions, dtype=np.int64)
     homo = np.array(gdata.is_homozygous, dtype=np.float64)
     n = len(positions)
@@ -49,6 +64,7 @@ def detect_roh(
         if frac >= homo_threshold:
             in_roh[start:end] = True
 
+    # Merge contiguous flagged positions into segments
     segments: list[ROHSegment] = []
     i = 0
     while i < n:
@@ -80,10 +96,9 @@ def detect_roh(
 
 
 def _length_class(length_bp: int) -> str:
-    if length_bp >= LONG_THRESHOLD:
-        return "LONG"
-    if length_bp >= MEDIUM_THRESHOLD:
-        return "MEDIUM"
-    if length_bp >= SHORT_THRESHOLD:
-        return "SHORT"
-    return "VERY_SHORT"
+    """Classify an ROH by physical length into short / medium / long."""
+    if length_bp >= MEDIUM_MAX_BP:
+        return "long"
+    if length_bp >= SHORT_MAX_BP:
+        return "medium"
+    return "short"

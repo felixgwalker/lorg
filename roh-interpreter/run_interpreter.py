@@ -66,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--generation-time",
         metavar="FLOAT",
         type=float,
-        default=6.0,
+        default=25.0,
         help="Generation time in years for Ne estimation.",
     )
     parser.add_argument(
@@ -138,21 +138,36 @@ def main(argv: list[str] | None = None) -> int:
 def _print_summary(result: dict) -> None:
     segs = result["segments"]
     frohs = result["froh_results"]
+    ne_ests = result.get("ne_estimates", [])
     print(f"\nROH Interpreter v{result['pipeline_version']}")
     print(f"ROH segments detected : {len(segs)}")
     if segs:
-        classes = {"SHORT": 0, "MEDIUM": 0, "LONG": 0, "VERY_SHORT": 0}
+        classes: dict[str, int] = {}
         for s in segs:
             classes[s.length_class] = classes.get(s.length_class, 0) + 1
-        for cls, cnt in sorted(classes.items()):
-            print(f"  {cls:12s}: {cnt}")
+        for cls in ("short", "medium", "long"):
+            cnt = classes.get(cls, 0)
+            print(f"  {cls:8s}: {cnt}")
     print(f"Individuals analyzed  : {len(frohs)}")
     for fr in frohs:
-        print(f"  {fr.individual_id}: FROH={fr.froh:.4f}, n_ROH={fr.n_roh}")
+        print(
+            f"  {fr.individual_id}: FROH={fr.froh:.4f}"
+            f"  (short={fr.froh_short:.4f}, medium={fr.froh_medium:.4f},"
+            f" long={fr.froh_long:.4f})  n_ROH={fr.n_roh}"
+        )
+    if ne_ests:
+        print("Ne estimates (recent / moderate / ancient):")
+        for ne in ne_ests:
+            print(
+                f"  {ne.individual_id}: Ne_recent={ne.ne_recent:.0f}"
+                f"  Ne_moderate={ne.ne_moderate:.0f}"
+                f"  Ne_ancient={ne.ne_ancient:.0f}"
+                f"  [95% CI {ne.ci_low:.0f}–{ne.ci_high:.0f}]"
+            )
     out = result.get("output_files", {})
     print("Output files:")
     for k, v in out.items():
-        print(f"  {k:15s}: {v}")
+        print(f"  {k:20s}: {v}")
     print()
 
 
