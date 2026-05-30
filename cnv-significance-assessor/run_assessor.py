@@ -4,9 +4,17 @@ CLI orchestrator for the CNV Significance Assessor.
 
 Run from the project root (cnv-significance-assessor/):
 
+    # Normal mode — BED CNV file + GFF3 annotation:
+    python run_assessor.py --cnv-bed variants.bed --gff annotation.gff3 --output-dir results/
+
+    # Legacy positional syntax also accepted:
     python run_assessor.py variants.bed annotation.gff3 --output-dir results/
 
-    python run_assessor.py variants.vcf annotation.gff3 \\
+    # Demo mode — no input files required:
+    python run_assessor.py --demo --output-dir results/
+
+    # Full options:
+    python run_assessor.py --cnv-bed variants.vcf --gff annotation.gff3 \\
         --output-dir results/ \\
         --pop-db gnomad_sv.bed \\
         --dosage-scores pHaplo_pTriplo.csv \\
@@ -37,21 +45,56 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-    # ── Required positional arguments ────────────────────────────────────
+    # ── Positional arguments (legacy / shorthand usage) ─────────────────
     parser.add_argument(
         "cnv_input",
         metavar="CNV",
+        nargs="?",
+        default=None,
         help=(
-            "CNV calls in BED or VCF format.  Format is auto-detected from "
-            "the file extension or header.  "
-            "BED: chrom, start, end, name[, score, strand, cnv_type].  "
-            "VCF: SVTYPE in INFO field required."
+            "CNV calls in BED or VCF format (positional, optional when "
+            "--cnv-bed or --demo is used).  Format is auto-detected."
         ),
     )
     parser.add_argument(
         "gff3",
         metavar="GFF3",
-        help="Reference genome gene annotation in GFF3 format.",
+        nargs="?",
+        default=None,
+        help=(
+            "Reference genome annotation in GFF3 format (positional, optional "
+            "when --gff or --demo is used)."
+        ),
+    )
+
+    # ── Named input flags (preferred over positionals) ───────────────────
+    parser.add_argument(
+        "--cnv-bed",
+        metavar="FILE",
+        default=None,
+        help=(
+            "CNV calls in BED or VCF format (tab- or comma-separated).  "
+            "Takes precedence over the positional CNV argument."
+        ),
+    )
+    parser.add_argument(
+        "--gff",
+        metavar="FILE",
+        default=None,
+        help=(
+            "Reference genome gene annotation in GFF3 format.  "
+            "Takes precedence over the positional GFF3 argument."
+        ),
+    )
+
+    # ── Demo mode ─────────────────────────────────────────────────────────
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help=(
+            "Run in demo mode using synthetic CNV records and built-in dosage "
+            "sensitivity scores.  No input files are required."
+        ),
     )
 
     # ── Output ───────────────────────────────────────────────────────────
@@ -82,7 +125,8 @@ def build_parser() -> argparse.ArgumentParser:
             "Haploinsufficiency and triplosensitivity scores in CSV format.  "
             "Expected columns (case-insensitive): gene/symbol, and any of "
             "pLI, pHaplo, pTriplo.  "
-            "Compatible with gnomAD and ClinGen score files."
+            "Compatible with gnomAD and ClinGen score files.  "
+            "In --demo mode the built-in scores are always used."
         ),
     )
 
@@ -148,19 +192,51 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def validate_args(args: argparse.Namespace) -> None:
+def _resolve_inputs(args: argparse.Namespace) -> tuple[str | None, str | None]:
+    """
+    Resolve the effective CNV file and GFF3 file paths from parsed args.
+
+    Named flags (--cnv-bed, --gff) take precedence over positional args.
+
+    Returns:
+        Tuple of (cnv_path_str_or_None, gff_path_str_or_None).
+    """
+    cnv_path = args.cnv_bed or args.cnv_input
+    gff_path = args.gff    or args.gff3
+    return cnv_path, gff_path
+
+
+def validate_args(args: argparse.Namespace) -> tuple[str | None, str | None]:
     """
     Validate argument values before pipeline execution.
 
     Raises SystemExit(1) with a descriptive message on any violation.
-    """
-    cnv_path = Path(args.cnv_input)
-    if not cnv_path.exists():
-        _fatal(f"CNV input file not found: {cnv_path}")
 
-    gff_path = Path(args.gff3)
-    if not gff_path.exists():
-        _fatal(f"GFF3 annotation file not found: {gff_path}")
+    Returns:
+        Tuple (cnv_path_str, gff_path_str) — both may be None in demo mode.
+    """
+    cnv_path_str, gff_path_str = _resolve_inputs(args)
+
+    if not args.demo:
+        # Non-demo: both CNV and GFF3 are required
+        if not cnv_path_str:
+            _fatal(
+                "CNV input is required.  "
+                "Provide a positional CNV argument, --cnv-bed FILE, or --demo."
+            )
+        if not gff_path_str:
+            _fatal(
+                "GFF3 annotation is required.  "
+                "Provide a positional GFF3 argument, --gff FILE, or --demo."
+            )
+
+        cnv_path = Path(cnv_path_str)
+        if not cnv_path.exists():
+            _fatal(f"CNV input file not found: {cnv_path}")
+
+        gff_path = Path(gff_path_str)
+        if not gff_path.exists():
+            _fatal(f"GFF3 annotation file not found: {gff_path}")
 
     if args.pop_db is not None and not Path(args.pop_db).exists():
         _fatal(f"Population database file not found: {args.pop_db}")
@@ -169,7 +245,7 @@ def validate_args(args: argparse.Namespace) -> None:
         _fatal(f"Dosage score file not found: {args.dosage_scores}")
 
     if args.min_cnv_size < 0:
-        _fatal(f"--min-cnv-size must be ≥ 0, got {args.min_cnv_size}.")
+        _fatal(f"--min-cnv-size must be >= 0, got {args.min_cnv_size}.")
 
     if not (0.0 < args.overlap_fraction <= 1.0):
         _fatal(
@@ -181,20 +257,22 @@ def validate_args(args: argparse.Namespace) -> None:
             f"--pop-freq-cutoff must be in (0.0, 1.0), got {args.pop_freq_cutoff}."
         )
 
+    return cnv_path_str, gff_path_str
+
 
 def print_summary(result: dict) -> None:
     """
     Print a formatted human-readable summary to stdout.
 
     Args:
-        result: The structured dict returned by run_pipeline().
+        result: The structured dict returned by run_pipeline() or run_demo_pipeline().
     """
     from src.output_writer import _build_summary_lines
 
     summary = result["summary"]
     scored  = result["scored"]
     lines = _build_summary_lines(summary, scored)
-    print("\n".join(lines))
+    print("\n".join(lines).encode(sys.stdout.encoding or "utf-8", errors="replace").decode(sys.stdout.encoding or "utf-8", errors="replace"))
 
     out_files = result.get("output_files", {})
     if out_files:
@@ -233,24 +311,31 @@ def main(argv: list[str] | None = None) -> int:
         stream=sys.stderr,
     )
 
-    validate_args(args)
+    cnv_path_str, gff_path_str = validate_args(args)
 
     # Import here so logging is configured first
-    from src.pipeline import run_pipeline
+    from src.pipeline import run_demo_pipeline, run_pipeline
 
     try:
-        result = run_pipeline(
-            cnv_path=Path(args.cnv_input),
-            gff_path=Path(args.gff3),
-            output_dir=Path(args.output_dir),
-            pop_db_path=Path(args.pop_db) if args.pop_db else None,
-            dosage_path=Path(args.dosage_scores) if args.dosage_scores else None,
-            min_cnv_size=args.min_cnv_size,
-            overlap_fraction=args.overlap_fraction,
-            pop_freq_cutoff=args.pop_freq_cutoff,
-            sample_name=args.sample_name,
-            no_plot=args.no_plot,
-        )
+        if args.demo:
+            result = run_demo_pipeline(
+                output_dir=Path(args.output_dir),
+                no_plot=args.no_plot,
+                sample_name=args.sample_name or "demo",
+            )
+        else:
+            result = run_pipeline(
+                cnv_path=Path(cnv_path_str),
+                gff_path=Path(gff_path_str),
+                output_dir=Path(args.output_dir),
+                pop_db_path=Path(args.pop_db) if args.pop_db else None,
+                dosage_path=Path(args.dosage_scores) if args.dosage_scores else None,
+                min_cnv_size=args.min_cnv_size,
+                overlap_fraction=args.overlap_fraction,
+                pop_freq_cutoff=args.pop_freq_cutoff,
+                sample_name=args.sample_name,
+                no_plot=args.no_plot,
+            )
     except FileNotFoundError as exc:
         _fatal(str(exc))
     except ValueError as exc:

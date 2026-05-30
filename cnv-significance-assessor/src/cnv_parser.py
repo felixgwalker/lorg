@@ -1,7 +1,7 @@
 """
 CNV input parser — BED and VCF formats.
 
-BED format (4+ columns, tab or space separated):
+BED format (4+ columns, tab or comma separated):
     chrom  start  end  name  [score  strand  cnv_type  ...]
     Columns 1–3 are mandatory.  Column 4 is used as the CNV ID.
     Column 7, if present, is interpreted as the CNV type.
@@ -11,6 +11,12 @@ VCF format (≥ 4.1 with structural variants):
     inversions (INV), and generic copy-number variants (CNV).
     END and SVLEN INFO tags are used to derive the end coordinate.
     Records without a resolvable extent are silently skipped.
+
+Public helpers
+--------------
+parse_cnv_bed(path)   — parse a BED-style file (tab or comma) → list[dict]
+make_demo_cnvs()      — return a list of synthetic CNV dicts for demo mode
+parse_cnvs(path)      — auto-detect BED/VCF and return list[CNVRecord]
 """
 
 from __future__ import annotations
@@ -53,6 +59,163 @@ class CNVRecord:
         self.cnv_type = _TYPE_ALIASES.get(upper, upper)
         if self.cnv_type not in SUPPORTED_CNV_TYPES:
             self.cnv_type = "UNKNOWN"
+
+
+def parse_cnv_bed(path: Path) -> list[dict]:
+    """
+    Parse a BED-style CNV file and return a list of plain dicts.
+
+    Accepts tab-separated or comma-separated files.  Header lines beginning
+    with '#', 'track', or 'browser' are skipped automatically.
+
+    Expected columns (0-indexed):
+        0  chrom
+        1  start   (0-based integer)
+        2  end     (0-based integer, exclusive)
+        3  name    → cnv_id                      (optional, default "cnv_<n>")
+        4  score                                  (ignored)
+        5  strand                                 (ignored)
+        6  cnv_type (DEL/DUP/…)                  (optional)
+
+    The returned dicts have keys:
+        chrom, start, end, cnv_id, cnv_type, size_bp
+
+    Args:
+        path: Path to BED or CSV CNV file.
+
+    Returns:
+        List of CNV dicts, one per valid line.
+
+    Raises:
+        FileNotFoundError: If *path* does not exist.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"CNV BED file not found: {path}")
+
+    records: list[dict] = []
+    n_bad = 0
+
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for lineno, raw in enumerate(fh, 1):
+            line = raw.strip()
+            if not line or line.startswith(("#", "track", "browser")):
+                continue
+
+            # Detect delimiter: prefer tab, fall back to comma
+            if "\t" in line:
+                cols = line.split("\t")
+            else:
+                cols = line.split(",")
+
+            if len(cols) < 3:
+                logger.debug("BED line %d: fewer than 3 fields — skipping.", lineno)
+                n_bad += 1
+                continue
+
+            chrom = cols[0].strip()
+            try:
+                start = int(cols[1].strip())
+                end   = int(cols[2].strip())
+            except ValueError:
+                logger.debug("BED line %d: non-integer start/end — skipping.", lineno)
+                n_bad += 1
+                continue
+
+            if end <= start:
+                logger.debug("BED line %d: end ≤ start — skipping.", lineno)
+                n_bad += 1
+                continue
+
+            cnv_id = cols[3].strip() if len(cols) > 3 and cols[3].strip() else f"cnv_{lineno}"
+            cnv_type = "UNKNOWN"
+
+            if len(cols) > 6 and cols[6].strip():
+                cnv_type = cols[6].strip()
+            if cnv_type == "UNKNOWN":
+                cnv_type = _type_from_name(cnv_id)
+
+            # Normalise aliases
+            upper = cnv_type.upper()
+            cnv_type = _TYPE_ALIASES.get(upper, upper)
+            if cnv_type not in SUPPORTED_CNV_TYPES:
+                cnv_type = "UNKNOWN"
+
+            records.append({
+                "chrom":    chrom,
+                "start":    start,
+                "end":      end,
+                "cnv_id":   cnv_id,
+                "cnv_type": cnv_type,
+                "size_bp":  end - start,
+            })
+
+    if n_bad:
+        logger.warning("parse_cnv_bed: skipped %d malformed lines in %s.", n_bad, path.name)
+    logger.info("parse_cnv_bed: parsed %d CNVs from %s.", len(records), path.name)
+    return records
+
+
+def make_demo_cnvs() -> list[dict]:
+    """
+    Return a list of synthetic CNV dicts for demo / smoke-test mode.
+
+    The demo set covers a range of sizes, types, and chromosomes so that
+    every significance tier (LIKELY_BENIGN, VUS, LIKELY_PATHOGENIC) is
+    represented after scoring.
+
+    Returns:
+        List of dicts with keys: chrom, start, end, cnv_id, cnv_type, size_bp.
+    """
+    raw = [
+        # (chrom, start,        end,          cnv_id,             cnv_type)
+        ("chr1",  1_000_000,    1_050_000,    "demo_DEL_small",   "DEL"),   # 50 kb   — benign size
+        ("chr1",  5_000_000,    5_800_000,    "demo_DEL_BRCA2",   "DEL"),   # 800 kb  — overlaps BRCA2
+        ("chr2",  25_000_000,   30_000_000,   "demo_DUP_large",   "DUP"),   # 5 Mb    — large DUP
+        ("chr3",  120_000_000,  121_000_000,  "demo_DEL_TP53",    "DEL"),   # 1 Mb    — overlaps TP53
+        ("chr4",  10_000_000,   10_020_000,   "demo_DUP_tiny",    "DUP"),   # 20 kb   — benign size
+        ("chr5",  50_000_000,   50_600_000,   "demo_DEL_PTEN",    "DEL"),   # 600 kb  — overlaps PTEN
+        ("chr6",  30_000_000,   30_500_000,   "demo_DUP_mid",     "DUP"),   # 500 kb  — mid-size DUP
+        ("chr7",  117_000_000,  117_800_000,  "demo_DEL_CFTR",    "DEL"),   # 800 kb  — overlaps CFTR
+        ("chr9",  21_000_000,   21_200_000,   "demo_DEL_CDKN2A",  "DEL"),   # 200 kb  — overlaps CDKN2A
+        ("chr10", 89_000_000,   89_400_000,   "demo_DEL_PTEN_2",  "DEL"),   # 400 kb  — overlaps PTEN
+        ("chr13", 32_000_000,   33_000_000,   "demo_DEL_BRCA2_2", "DEL"),   # 1 Mb    — overlaps BRCA2
+        ("chr13", 48_000_000,   49_500_000,   "demo_DEL_RB1",     "DEL"),   # 1.5 Mb  — overlaps RB1
+        ("chr17", 7_000_000,    7_700_000,    "demo_DEL_TP53_2",  "DEL"),   # 700 kb  — overlaps TP53
+        ("chr17", 43_000_000,   44_200_000,   "demo_DEL_BRCA1",   "DEL"),   # 1.2 Mb  — overlaps BRCA1
+        ("chr17", 29_000_000,   32_000_000,   "demo_DUP_NF1",     "DUP"),   # 3 Mb    — overlaps NF1
+        ("chr22", 22_000_000,   22_500_000,   "demo_DEL_NF2",     "DEL"),   # 500 kb  — overlaps NF2
+        ("chrX",  30_000_000,   30_300_000,   "demo_DUP_chrX",    "DUP"),   # 300 kb
+        ("chr1",  200_000_000,  206_000_000,  "demo_DEL_6Mb",     "DEL"),   # 6 Mb    — very large
+        ("chr8",  128_000_000,  128_030_000,  "demo_DEL_MYC",     "DEL"),   # 30 kb   — small near MYC
+        ("chr11", 5_000_000,    5_200_000,    "demo_DEL_KCNQ1",   "DEL"),   # 200 kb
+    ]
+    records = []
+    for chrom, start, end, cnv_id, cnv_type in raw:
+        records.append({
+            "chrom":    chrom,
+            "start":    start,
+            "end":      end,
+            "cnv_id":   cnv_id,
+            "cnv_type": cnv_type,
+            "size_bp":  end - start,
+        })
+    logger.info("make_demo_cnvs: generated %d synthetic CNV records.", len(records))
+    return records
+
+
+def cnv_dicts_to_records(cnv_dicts: list[dict]) -> list[CNVRecord]:
+    """Convert a list of CNV dicts (from parse_cnv_bed / make_demo_cnvs) to CNVRecord objects."""
+    records = []
+    for d in cnv_dicts:
+        records.append(CNVRecord(
+            cnv_id=d["cnv_id"],
+            chrom=d["chrom"],
+            start=d["start"],
+            end=d["end"],
+            cnv_type=d["cnv_type"],
+        ))
+    return sorted(records, key=lambda r: (r.chrom, r.start))
 
 
 def parse_cnvs(path: Path, min_size: int = 0) -> list[CNVRecord]:

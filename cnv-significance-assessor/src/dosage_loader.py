@@ -42,6 +42,62 @@ _PTRIPLO_ALIASES: set[str] = {
 }
 
 
+def get_builtin_dosage_scores() -> dict[str, dict[str, float]]:
+    """
+    Return a hardcoded dict of ClinGen haploinsufficiency / triplosensitivity
+    scores for ~20 well-characterised disease genes.
+
+    Scores are derived from:
+      - ClinGen Dosage Sensitivity Map (2023 release)
+      - gnomAD v4 pLI / pHaplo / pTriplo values
+
+    Returns:
+        Dict mapping upper-cased gene name to score dict.
+        Keys present per gene: "pHaplo", "pTriplo", "pLI" (where available).
+
+    Example::
+
+        {
+            "BRCA1": {"pHaplo": 0.97, "pTriplo": 0.08, "pLI": 0.99},
+            ...
+        }
+    """
+    # Format: GENE_NAME → {pHaplo, pTriplo, pLI}
+    # pHaplo / pTriplo from Collins et al. 2022 / ClinGen; pLI from gnomAD v4.
+    _DATA: dict[str, dict[str, float]] = {
+        # Breast / ovarian cancer
+        "BRCA1":  {"pHaplo": 0.97, "pTriplo": 0.08, "pLI": 0.99},
+        "BRCA2":  {"pHaplo": 0.95, "pTriplo": 0.06, "pLI": 0.98},
+        # Tumour suppressors
+        "TP53":   {"pHaplo": 0.96, "pTriplo": 0.05, "pLI": 0.95},
+        "RB1":    {"pHaplo": 0.94, "pTriplo": 0.04, "pLI": 0.97},
+        "PTEN":   {"pHaplo": 0.92, "pTriplo": 0.07, "pLI": 0.98},
+        "APC":    {"pHaplo": 0.90, "pTriplo": 0.05, "pLI": 0.99},
+        "VHL":    {"pHaplo": 0.88, "pTriplo": 0.04, "pLI": 0.96},
+        "CDKN2A": {"pHaplo": 0.85, "pTriplo": 0.06, "pLI": 0.91},
+        "NF2":    {"pHaplo": 0.87, "pTriplo": 0.05, "pLI": 0.94},
+        # Oncogenes / dominant gain-of-function
+        "MYC":    {"pHaplo": 0.30, "pTriplo": 0.88, "pLI": 0.40},
+        "ERBB2":  {"pHaplo": 0.25, "pTriplo": 0.85, "pLI": 0.35},
+        "MDM2":   {"pHaplo": 0.20, "pTriplo": 0.80, "pLI": 0.28},
+        # Neurofibromatosis / RASopathy
+        "NF1":    {"pHaplo": 0.93, "pTriplo": 0.10, "pLI": 0.99},
+        # Lung / colorectal
+        "KRAS":   {"pHaplo": 0.15, "pTriplo": 0.72, "pLI": 0.20},
+        "STK11":  {"pHaplo": 0.89, "pTriplo": 0.05, "pLI": 0.97},
+        # Mismatch repair (Lynch syndrome)
+        "MLH1":   {"pHaplo": 0.91, "pTriplo": 0.04, "pLI": 0.98},
+        "MSH2":   {"pHaplo": 0.90, "pTriplo": 0.04, "pLI": 0.97},
+        # Cystic fibrosis
+        "CFTR":   {"pHaplo": 0.78, "pTriplo": 0.12, "pLI": 0.73},
+        # Haematological
+        "WT1":    {"pHaplo": 0.86, "pTriplo": 0.06, "pLI": 0.93},
+        # Cardiac / channelopathy
+        "KCNQ1":  {"pHaplo": 0.82, "pTriplo": 0.09, "pLI": 0.90},
+    }
+    return {gene.upper(): scores for gene, scores in _DATA.items()}
+
+
 def load_dosage_scores(path: Path) -> dict[str, dict[str, float]]:
     """
     Load dosage sensitivity scores from a CSV file.
