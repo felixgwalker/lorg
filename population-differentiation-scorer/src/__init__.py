@@ -1,2 +1,0 @@
-"""Population Differentiation Scorer."""
-__version__ = "1.0.0"
