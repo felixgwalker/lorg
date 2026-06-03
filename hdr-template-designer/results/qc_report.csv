@@ -1,9 +1,0 @@
-check,value,flag,note
-gc_left_arm,0.42,False,GC=42.0% (OK)
-gc_right_arm,0.5859,False,GC=58.6% (OK)
-homopolymer_left_arm,4.0,False,Longest homopolymer run: 4 (OK)
-homopolymer_right_arm,4.0,False,Longest homopolymer run: 4 (OK)
-repeat_left_arm,0.0515,False,Most common 4-mer fraction: 5.2% (OK)
-repeat_right_arm,0.0208,False,Most common 4-mer fraction: 2.1% (OK)
-hairpin_left_arm,18.0,True,Potential hairpin sites: 18 (RISK)
-hairpin_right_arm,17.0,True,Potential hairpin sites: 17 (RISK)

@@ -1,2 +1,0 @@
-"""Guide RNA off-target scorer."""
-__version__ = "0.1.0"
