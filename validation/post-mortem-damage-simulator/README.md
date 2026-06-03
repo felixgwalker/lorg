@@ -1,10 +1,24 @@
 # Post-Mortem Damage Simulator
 
+> **Internal benchmark utility — not a shipped tool.**
+>
+> gargammel and fragSim already provide production-grade ancient-DNA read simulators.
+> This module lives in `validation/` and exists solely to generate ground-truth damaged
+> reads for benchmarking every PIVOT tool's damage-aware claims. It is the mechanism
+> that turns "we claim damage-awareness" into a falsifiable, per-tool assertion backed
+> by simulated data with known parameters.  Do not publish or expose it as a standalone
+> product.
+
 Simulates post-mortem damage in ancient DNA reads by applying the Briggs model to generate C→T / G→A deamination patterns and realistic fragment length distributions.
 
-## Overview
+## Role in the validation harness
 
-Given a reference genome FASTA, this tool samples reads, introduces post-mortem damage according to a configurable damage model, and outputs a FASTQ file with authentic ancient DNA characteristics for use in tool benchmarking and contamination testing.
+Used by `validation/` benchmark scripts to:
+1. Generate synthetic ancient reads at controlled damage levels from reference genomes.
+2. Feed those reads into each PIVOT tool (damage classifier, contamination estimator, etc.).
+3. Compare tool outputs against known ground truth to produce per-method accuracy metrics.
+
+See `validation/README.md` for the full simulation pipeline.
 
 ## Approach
 

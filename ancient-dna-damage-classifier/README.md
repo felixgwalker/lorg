@@ -2,6 +2,8 @@
 
 Analyses sequencing reads from ancient or historically derived specimens to characterise post-mortem DNA damage patterns and classify reads as authentically ancient, potentially modern-contaminated, or ambiguous. Accurate damage profiling is essential for validating ancient genome assemblies used as reference targets in de-extinction projects, and for distinguishing true ancestral variants from artefactual substitutions introduced by chemical degradation.
 
+**Scope note:** This tool absorbs the planned `dna-fragmentation-profiler` module. Fragment length distribution profiling and terminal-base deamination pattern visualisation (C→T at 5' / G→A at 3') are included here alongside the Bayesian per-read classifier, so both concerns live in a single aDNA characterisation step.
+
 ## Inputs
 
 - Aligned reads in BAM format mapped to a reference genome, or raw reads in FASTQ format
