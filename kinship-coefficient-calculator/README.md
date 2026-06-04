@@ -8,6 +8,20 @@ Given a multi-sample VCF of LD-pruned SNPs, this tool computes pairwise kinship 
 
 ## Approach
 
+**Baseline:** KING (Manichaikul et al. 2010), READ (Monroy Kuhn et al. 2018), and
+lcMLkin (Lipatov et al. 2015) estimate kinship from modern diploid, ancient
+pseudo-haploid, and low-coverage genotypes respectively. This tool does not
+re-implement those estimators — it wraps READ/lcMLkin for aDNA mode and KING for
+modern comparisons.
+
+**Novel layer:** Novel *only* as aDNA kinship at low coverage. The publishable
+contribution is the *unified interface* that selects the appropriate estimator
+(KING for diploid, READ/lcMLkin for pseudo-haploid low-coverage) based on the
+sample's coverage and genotyping mode, and expresses the output as a relationship
+class with confidence intervals adjusted for the lower effective marker count in
+aDNA. This matters for de-extinction pedigree inference where mixing kinship
+estimates from tools designed for different data types produces unreliable results.
+
 **Inputs:** Multi-sample VCF of LD-pruned bi-allelic SNPs (recommended ≥ 10 k SNPs after pruning).
 
 **Core method:** The KING-robust kinship estimator computes φ̂ = (IBS2 − 2·IBS0) / (4 · sqrt(Het_A · Het_B)) per pair, which is robust to population structure. IBD-mode estimates the probability of sharing 0, 1, or 2 alleles IBD (π0, π1, π2) from allele-frequency-adjusted IBS sharing. The genomic relatedness matrix (GRM) computes A = (1/L) · Σ (g − 2p)(g − 2p)ᵀ / 2p(1−p). Relationship thresholds follow KING conventions: φ ≥ 0.354 (identical), ≥ 0.177 (1st degree), ≥ 0.0884 (2nd degree), ≥ 0.0442 (3rd degree).

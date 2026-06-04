@@ -2,6 +2,20 @@
 
 Interprets runs of homozygosity (ROH) detected in genome-wide SNP or whole-genome sequencing data to infer an individual's or population's inbreeding history, distinguish recent inbreeding from ancient bottleneck effects, and estimate current effective population size. ROH analysis is a cornerstone metric in conservation genomics and de-extinction feasibility assessment, providing a direct measure of genomic inbreeding that integrates both recent and historical demographic signals.
 
+## Approach — Baseline & Novel Layer
+
+**Baseline:** PLINK `--homozyg` and `bcftools roh` detect ROH segments and compute
+FROH. This tool does not re-implement those detectors — it calls PLINK/bcftools and
+parses their output.
+
+**Novel layer:** PLINK and bcftools assume diploid genotype calls at standard depth.
+Ancient DNA genotypes are called pseudo-haploidly (one allele randomly sampled per
+site) at coverage < 2×, which systematically inflates false-positive ROH. The novel
+contribution is the *aDNA-aware interpretation layer*: a correction model for
+pseudo-haploid ROH inflation, a low-coverage confidence filter per ROH segment, and
+a de-extinction-specific report framing FROH as a project viability metric (alongside
+inbreeding-risk-forecaster output) rather than a standalone statistic.
+
 ## Inputs
 
 - Genotype data in VCF format or PLINK binary format (.bed/.bim/.fam)

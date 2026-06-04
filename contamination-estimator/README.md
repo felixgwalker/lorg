@@ -8,6 +8,18 @@ Given a BAM file of ancient DNA reads and a reference genome, this tool applies 
 
 ## Approach
 
+**Baseline:** ANGSD (Korneliussen et al. 2014), schmutzi (Renaud et al. 2015), and
+ContamMix (Fu et al. 2013) each provide likelihood-based contamination estimates from
+different evidence streams. This tool does not re-derive those likelihoods — it calls
+each as a dependency (subprocess or library).
+
+**Novel layer:** The novel contribution is the *composite verdict layer*: combining
+MT-consensus deviation, X-heterozygosity, ANGSD GLF, and schmutzi deamination-aware
+estimates into a single weighted estimate with a QC decision threshold. A plain call
+to any single tool leaves the user to integrate the results manually; this tool
+surfaces a pass/fail verdict calibrated for de-extinction reference-sample QC
+pipelines.
+
 **Inputs:** BAM file of ancient DNA reads (mapped to reference genome); reference genome FASTA.
 
 **Core method:** (1) **MT consensus** — reads mapping to the mitochondrial genome are piled up; non-consensus alleles inconsistent with post-mortem damage patterns (C→T, G→A) are flagged as potential contamination. (2) **X-chromosome heterozygosity** — for male samples, excess heterozygosity on the X chromosome (which should be hemizygous) indicates contamination. (3) **ANGSD GLF** — genotype likelihood-based estimation of contamination fraction using a panel of high-frequency polymorphisms. (4) **schmutzi** — deamination-aware contamination estimation. Estimates from all methods are combined (weighted mean); the combined estimate is compared to the threshold (default 3 %).

@@ -8,6 +8,18 @@ Given a BAM file of aligned ancient DNA reads, this tool computes a comprehensiv
 
 ## Approach
 
+**Baseline:** `samtools depth`, `samtools flagstat`, and `mosdepth` provide
+per-base depth and summary coverage metrics. This tool wraps samtools/pysam — it
+does not re-implement read parsing.
+
+**Novel layer:** Modern coverage reports are designed for 30× WGS clinical samples.
+Ancient DNA operates at 0.01–5× with high duplication and low endogenous fraction.
+The novel contribution is the *aDNA-specific single-report layer*: endogenous
+fraction (reads mapping after strict quality filters), expected coverage uniformity
+under aDNA fragment-length distributions, and a tiered coverage-class verdict
+(insufficient / low / medium / high) calibrated to aDNA downstream analysis
+thresholds — none of which standard tools surface together.
+
 **Inputs:** Sorted and indexed BAM file of aligned ancient DNA reads.
 
 **Core method:** Read-level statistics (total reads, mapped reads, duplicate reads, mapping quality distribution) are extracted from BAM flags and MAPQ fields. Per-base depth is computed with configurable MAPQ (default 25) and base quality (default 20) thresholds, with optional duplicate exclusion. Breadth metrics report the fraction of the reference covered at ≥ 1×, 5×, 10×, and 20× depth. Endogenous fraction is the mapping rate after quality filters. Per-chromosome depth and breadth are reported. Coverage class is assigned by mean depth: ≥ 5× (high), 1–5× (medium), 0.1–1× (low), < 0.1× (insufficient).

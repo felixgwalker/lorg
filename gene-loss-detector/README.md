@@ -8,6 +8,20 @@ Given an ortholog presence/absence table and a Newick species tree, this tool ap
 
 ## Approach
 
+**Baseline:** CESAR2.0 (Sharma et al. 2017) detects gene loss from whole-genome
+alignments; Ortholog finder tools (OrthoFinder, OMA) determine presence/absence.
+This tool does not re-implement alignment logic — it wraps CESAR2.0 and accepts
+OrthoFinder-style presence/absence tables.
+
+**Novel layer:** The de-extinction-specific addition is *degradation robustness*.
+Standard gene-loss calls treat missing BLAST hits as true gene absences. In low-
+coverage aDNA assemblies, gaps and mis-assemblies cause the same signal. The novel
+contribution is a confidence layer that cross-references coverage depth at the
+expected locus (from `palaeogenomic-coverage-assessor`) before calling a gene loss:
+a gene absent in the aDNA assembly but in a zero-coverage region is classified
+"uncertain (coverage gap)" rather than "lost," preventing spurious edits from
+entering the burden calculator.
+
 **Inputs:** TSV of ortholog presence/absence per species (rows = genes, columns = species, values = gene ID or absent); optional Newick species tree; optional protein FASTAs for pseudogenisation scanning.
 
 **Core method:** For each gene, the species coverage vector is mapped onto the phylogeny. Dollo parsimony is applied: a gene is assumed to have been present in the ancestor if ≥ 3 species in independent clades have it. Loss is inferred on the most parsimonious branch. If protein FASTAs are provided, the query genome is searched for remnants (TBLASTN); frameshifts and premature stop codons in the remnant confirm pseudogenisation. Complete absence of any BLAST hit (< 30 % coverage of any exon) is classified as deletion.

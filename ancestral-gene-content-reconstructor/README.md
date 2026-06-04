@@ -8,6 +8,18 @@ Given a gene presence/absence table and a species phylogeny, this tool infers wh
 
 ## Approach
 
+**Baseline:** Count (Csurös 2010) and BadiRate (Librado et al. 2012) perform gene
+family gain/loss inference on phylogenies. This tool does not re-implement their
+rate models — it wraps Count/BadiRate as dependencies.
+
+**Novel layer:** Kept only as an *input stage for target genome reconstruction*.
+The de-extinction-specific addition is propagating gene-content uncertainty into the
+`TargetReconstruction` object: ancestral gene sets with posterior probabilities feed
+`regulatory-element-conservation-scorer` and `proxy-species-edit-burden-calculator`
+to determine which gene-regulatory changes are necessary edits vs. genuine losses
+already in the proxy lineage. This framing — gene content as an edit-burden input —
+is not available from Count or BadiRate alone.
+
 **Inputs:** TSV of gene presence/absence per species (rows = genes, columns = species, values = 1/0); Newick species tree.
 
 **Core method:** Under Dollo parsimony, each gene is assumed to have arisen once (on the most ancestral branch consistent with the observed presence pattern) and may have been lost multiple times. Under the Bayesian model, gain and loss rates are estimated by MCMC with flat priors; the posterior probability of presence at each node is sampled. Internal nodes are reconstructed as present (P > 0.8), absent (P < 0.2), or uncertain. Gene counts per ancestral node and branch-level gain/loss tallies are reported.

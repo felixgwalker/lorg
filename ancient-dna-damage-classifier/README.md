@@ -4,6 +4,24 @@ Analyses sequencing reads from ancient or historically derived specimens to char
 
 **Scope note:** This tool absorbs the planned `dna-fragmentation-profiler` module. Fragment length distribution profiling and terminal-base deamination pattern visualisation (C→T at 5' / G→A at 3') are included here alongside the Bayesian per-read classifier, so both concerns live in a single aDNA characterisation step.
 
+## Approach — Baseline & Novel Layer
+
+**Baseline:** mapDamage2 (Jónsson et al. 2013) computes damage patterns and rescales
+quality scores; PMDtools (Skoglund et al. 2014) filters reads by post-mortem damage.
+This tool does not re-implement those damage models — it wraps mapDamage2/PMDtools
+and parses their output tables.
+
+**Novel layer:** The novel contribution is the *per-read Bayesian classifier and
+de-extinction authentication verdict*. mapDamage2 outputs fragment-level damage
+profiles; this tool adds a posterior probability per read of being authentically
+ancient (vs. modern contaminant or low-damage modern read), calibrated against the
+library-level damage prior. The output `DamageProfile` object (in `deextinct_core`)
+carries these posteriors forward to `ancestral-state-reconstructor` and
+`introgression-detector` for damage-aware downstream analysis.
+
+**Scope:** Also absorbs `dna-fragmentation-profiler` (deleted in stage2). Fragment
+length histogram and 5′/3′ terminal substitution visualisation are produced here.
+
 ## Inputs
 
 - Aligned reads in BAM format mapped to a reference genome, or raw reads in FASTQ format

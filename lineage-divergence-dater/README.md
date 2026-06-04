@@ -8,6 +8,19 @@ Given a sequence alignment, phylogeny, and optional calibration constraints or r
 
 ## Approach
 
+**Baseline:** BEAST2 (Bouckaert et al. 2019) and OxCal (Bronk Ramsey 2009) perform
+Bayesian molecular clock and radiocarbon-date integration at publication quality.
+This tool does not re-implement their MCMC samplers — it wraps or interfaces with
+BEAST2 for the computation.
+
+**Novel layer:** Kept *only* for the aDNA tip-dating mode. The strict-clock and
+relaxed-clock parts that duplicate BEAST2 capabilities should not be published. The
+novel contribution is the *aDNA tip age propagation*: radiocarbon calibration curves
+are combined with damage-model uncertainty (from `DamageProfile`) to assign more
+conservative tip-age priors when high deamination inflates the apparent age of
+degraded sequences. This is the layer BEAST2 cannot provide without external
+pre-processing of the aDNA authenticity data.
+
 **Inputs:** FASTA multiple sequence alignment; Newick phylogenetic tree; optional JSON of calibration points (node ID, age bounds) or dated-tip ages (sample ID, radiocarbon age BP, uncertainty).
 
 **Core method:** (1) **Molecular clock** — calibrated node dating using a strict or relaxed clock, converting branch lengths to absolute time using the calibration points and a substitution rate. (2) **Bayesian dated tips** — for ancient DNA datasets, tip ages from radiocarbon dating are treated as calibrations, allowing the substitution rate and divergence dates to be co-estimated; useful when no fossil calibrations are available but multiple ancient samples are dated. (3) **Pairwise distance** — simple Jukes-Cantor corrected pairwise distances divided by 2× the substitution rate, providing quick uncalibrated estimates. All methods output mean divergence time and 95 % confidence/credible intervals.

@@ -8,6 +8,20 @@ Given a multiple sequence alignment and a phylogenetic tree, this tool computes 
 
 ## Approach
 
+**Baseline:** PastML (Ishikawa et al. 2019) and FastML (Ashkenazy et al. 2012) already
+perform marginal ML ancestral reconstruction on modern sequences. This tool does not
+re-implement those kernels.
+
+**Novel layer:** Reframed as a *target-genome reconstructor* for de-extinction.
+The key addition is aDNA-conditioned inference: ancient tip sequences with post-mortem
+damage (C→T / G→A deamination) are treated as degraded observations rather than
+clean sequences. Per-site damage posteriors from `ancient-dna-damage-classifier`
+(via `deextinct_core.DamageProfile`) are propagated through the reconstruction so
+that per-site posterior uncertainty in the output `TargetReconstruction` reflects
+both phylogenetic ambiguity *and* damage noise. This uncertainty then flows into
+`proxy-species-edit-burden-calculator` and `proxy-edit-designer` — the chain that
+is impossible to represent in PastML/FastML operating on modern data alone.
+
 **Inputs:** FASTA multiple sequence alignment; Newick phylogenetic tree.
 
 **Core method:** Under the **ML** method, Felsenstein's pruning algorithm computes the marginal likelihood of each character state at each internal node given the alignment and a specified substitution model (default GTR+G with 4 gamma rate categories). The state with the highest posterior is assigned; sites with maximum posterior < 0.5 are flagged as uncertain. **Parsimony** uses Fitch parsimony to assign the most parsimonious ancestral state with no branch-length model. **Bayesian** samples ancestral states under the GTR+G model via MCMC, summarising posterior distributions per site.

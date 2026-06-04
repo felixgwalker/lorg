@@ -2,6 +2,21 @@
 
 Detects genomic regions and individual genes showing evidence of positive (adaptive) selection across a multi-species alignment, identifying candidate loci likely responsible for lineage-specific adaptive traits. In de-extinction and conservation genomics, pinpointing positively selected genes in the target extinct species highlights the functionally important changes that must be faithfully recapitulated — not merely the most divergent sequences — when engineering a proxy genome.
 
+## Approach — Baseline & Novel Layer
+
+**Baseline:** PAML (Yang 2007) and HyPhy (Kosakovsky Pond et al. 2005) implement
+codon-based dN/dS tests; selscan/iHS (Szpiech & Hernandez 2014) detects recent
+selective sweeps in population data. This tool does not re-implement those models —
+it wraps PAML/HyPhy branch-site tests.
+
+**Novel layer:** Reframed from "detect generic selection" to "identify traits the
+proxy must recapitulate." The de-extinction-specific additions are: (1) a
+damage-aware null model — synonymous substitution rates are corrected for the
+elevated C→T/G→A background in ancient sequences (uncorrected, deamination
+artefacts inflate dN/dS at C and G positions); (2) output framed as a prioritised
+list of positively selected loci in the *target lineage* that are absent from the
+proxy, directly feeding the edit-burden calculator.
+
 ## Inputs
 
 - Multi-species codon-aware alignment in FASTA or MAF format covering coding sequences of interest
