@@ -1,0 +1,7 @@
+numpy>=1.24.0
+pandas>=2.0.0
+biopython>=1.81
+matplotlib>=3.7.0
+# External tools called via subprocess:
+#   CRISPOR  — https://github.com/maximilianh/crisporWebsite
+#   PrimeDesign — https://github.com/pinellolab/PrimeDesign
